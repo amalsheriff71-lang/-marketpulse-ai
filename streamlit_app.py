@@ -20,38 +20,22 @@ from huggingface_hub import snapshot_download
 # ============================================================
 # HTML RENDER HELPER
 # ============================================================
-#
-# BUG FIX (root cause of raw "<div class=...>" text showing up
-# in the deployed app instead of rendered HTML/cards):
-#
-# Streamlit's st.markdown() runs content through a Markdown
-# parser *before* honoring unsafe_allow_html=True. Markdown's
-# spec treats any line indented by 4+ spaces (especially one
-# following a blank line) as the start of an "indented code
-# block", and renders it verbatim as literal code instead of
-# parsing it as HTML.
-#
-# Every HTML block in this file was written as an indented,
-# multi-line triple-quoted string (natural for readability), and
-# that indentation is exactly what triggered Markdown's
-# code-block rule -> the <div> markup was displayed as literal
-# text in a code box instead of being rendered as HTML.
-#
-# unsafe_allow_html=True was already set correctly everywhere;
-# it was never the actual problem. The fix is to strip leading
-# whitespace from every line of HTML right before handing it to
-# st.markdown(), so Markdown never sees a 4-space indent.
-#
+
 def render_html(html: str) -> None:
     """
-    Render a block of raw HTML safely in Streamlit.
-
-    Strips per-line leading/trailing whitespace so Markdown's
-    "indented code block" rule never triggers, then renders the
-    HTML via st.markdown(unsafe_allow_html=True).
+    Render HTML safely in Streamlit.
+    Removes leading indentation that can cause Markdown
+    to interpret HTML as a code block.
     """
-    lines = [line.strip() for line in html.strip("\n").splitlines()]
-    st.markdown("\n".join(lines), unsafe_allow_html=True)
+    lines = [
+        line.strip()
+        for line in html.strip("\n").splitlines()
+    ]
+
+    st.markdown(
+        "\n".join(lines),
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================
@@ -109,7 +93,9 @@ def load_module(filename, module_name):
             f"Could not load {filename}"
         )
 
-    module = importlib.util.module_from_spec(spec)
+    module = importlib.util.module_from_spec(
+        spec
+    )
 
     spec.loader.exec_module(module)
 
@@ -133,7 +119,10 @@ except Exception as e:
         "❌ Failed to load MarketPulse AI modules."
     )
 
-    with st.expander("Show technical error"):
+    with st.expander(
+        "Show technical error"
+    ):
+
         st.exception(e)
 
     st.stop()
@@ -143,9 +132,17 @@ except Exception as e:
 # PROJECT FUNCTIONS
 # ============================================================
 
-load_vectorstore = prompting_module.load_vectorstore
-generate_answer = prompting_module.generate_answer
-get_llm = prompting_module.get_llm
+load_vectorstore = (
+    prompting_module.load_vectorstore
+)
+
+generate_answer = (
+    prompting_module.generate_answer
+)
+
+get_llm = (
+    prompting_module.get_llm
+)
 
 
 # ============================================================
@@ -156,456 +153,667 @@ render_html(
     """
     <style>
 
-    .stApp {
-    background:
-    radial-gradient(
-    circle at 8% 0%,
-    rgba(99, 102, 241, 0.16),
-    transparent 28%
-    ),
-    radial-gradient(
-    circle at 92% 8%,
-    rgba(168, 85, 247, 0.12),
-    transparent 25%
-    ),
-    linear-gradient(
-    135deg,
-    #070b16 0%,
-    #0b1020 48%,
-    #10162a 100%
-    );
+    /* ========================================================
+       GLOBAL APP
+    ======================================================== */
 
-    color: #f8fafc;
+    .stApp {
+        background:
+            radial-gradient(
+                circle at 8% 0%,
+                rgba(99, 102, 241, 0.16),
+                transparent 28%
+            ),
+            radial-gradient(
+                circle at 92% 8%,
+                rgba(168, 85, 247, 0.12),
+                transparent 25%
+            ),
+            linear-gradient(
+                135deg,
+                #070b16 0%,
+                #0b1020 48%,
+                #10162a 100%
+            );
+
+        color: #f8fafc;
     }
+
+
+    /* ========================================================
+       HEADER
+    ======================================================== */
 
     header[data-testid="stHeader"] {
-    background: transparent;
+        background: transparent;
     }
+
+
+    /* ========================================================
+       MAIN CONTAINER
+    ======================================================== */
 
     .main .block-container {
-    max-width: 1500px;
-    padding-top: 2rem;
-    padding-bottom: 4rem;
+        max-width: 1500px;
+        padding-top: 2rem;
+        padding-bottom: 4rem;
     }
 
-    section[data-testid="stSidebar"] {
-    background:
-    linear-gradient(
-    180deg,
-    #080c18 0%,
-    #0d1324 100%
-    );
 
-    border-right:
-    1px solid
-    rgba(255,255,255,0.07);
+    /* ========================================================
+       SIDEBAR
+    ======================================================== */
+
+    section[data-testid="stSidebar"] {
+        background:
+            linear-gradient(
+                180deg,
+                #080c18 0%,
+                #0d1324 100%
+            );
+
+        border-right:
+            1px solid
+            rgba(255,255,255,0.07);
     }
 
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 {
-    color: #f8fafc;
+        color: #f8fafc;
     }
 
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] li {
-    color: #94a3b8;
+        color: #94a3b8;
     }
+
+
+    /* ========================================================
+       TYPOGRAPHY
+    ======================================================== */
 
     h1,
     h2,
     h3,
     h4 {
-    letter-spacing: -0.025em;
+        letter-spacing: -0.025em;
     }
 
     h1 {
-    font-weight: 800 !important;
+        font-weight: 800 !important;
     }
 
+
+    /* ========================================================
+       HERO
+    ======================================================== */
+
     .hero-container {
-    padding: 3.2rem 3rem;
-    border-radius: 28px;
+        padding: 3.2rem 3rem;
+        border-radius: 28px;
 
-    background:
-    linear-gradient(
-    135deg,
-    rgba(30,41,59,0.94),
-    rgba(15,23,42,0.98)
-    );
+        background:
+            linear-gradient(
+                135deg,
+                rgba(30,41,59,0.94),
+                rgba(15,23,42,0.98)
+            );
 
-    border:
-    1px solid
-    rgba(148,163,184,0.14);
+        border:
+            1px solid
+            rgba(148,163,184,0.14);
 
-    box-shadow:
-    0 30px 80px
-    rgba(0,0,0,0.35);
+        box-shadow:
+            0 30px 80px
+            rgba(0,0,0,0.35);
 
-    margin-bottom: 2rem;
+        margin-bottom: 2rem;
     }
 
     .hero-badge-native {
-    display: inline-block;
-    padding: 0.45rem 0.9rem;
-    border-radius: 999px;
+        display: inline-block;
 
-    background:
-    rgba(99,102,241,0.14);
+        padding:
+            0.45rem
+            0.9rem;
 
-    border:
-    1px solid
-    rgba(129,140,248,0.28);
+        border-radius: 999px;
 
-    color: #c7d2fe;
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    margin-bottom: 1rem;
+        background:
+            rgba(99,102,241,0.14);
+
+        border:
+            1px solid
+            rgba(129,140,248,0.28);
+
+        color: #c7d2fe;
+
+        font-size: 0.78rem;
+
+        font-weight: 800;
+
+        letter-spacing: 0.04em;
+
+        margin-bottom: 1rem;
     }
 
     .hero-title-native {
-    font-size: clamp(2rem, 4vw, 3.4rem);
-    line-height: 1.08;
-    font-weight: 850;
-    color: #ffffff;
-    margin-bottom: 1rem;
+        font-size:
+            clamp(
+                2rem,
+                4vw,
+                3.4rem
+            );
+
+        line-height: 1.08;
+
+        font-weight: 850;
+
+        color: #ffffff;
+
+        margin-bottom: 1rem;
     }
 
     .hero-highlight {
-    background:
-    linear-gradient(
-    90deg,
-    #818cf8,
-    #c4b5fd
-    );
+        background:
+            linear-gradient(
+                90deg,
+                #818cf8,
+                #c4b5fd
+            );
 
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text;
+
+        -webkit-text-fill-color:
+            transparent;
     }
 
     .hero-subtitle-native {
-    font-size: 1.05rem;
-    line-height: 1.8;
-    color: #94a3b8;
-    max-width: 900px;
+        font-size: 1.05rem;
+
+        line-height: 1.8;
+
+        color: #94a3b8;
+
+        max-width: 900px;
     }
 
+
+    /* ========================================================
+       KPI CARDS
+    ======================================================== */
+
     .kpi-card-native {
-    padding: 1.35rem;
-    min-height: 135px;
-    border-radius: 20px;
+        padding: 1.35rem;
 
-    background:
-    linear-gradient(
-    145deg,
-    rgba(30,41,59,0.82),
-    rgba(15,23,42,0.84)
-    );
+        min-height: 135px;
 
-    border:
-    1px solid
-    rgba(148,163,184,0.13);
+        border-radius: 20px;
 
-    box-shadow:
-    0 15px 40px
-    rgba(0,0,0,0.16);
+        background:
+            linear-gradient(
+                145deg,
+                rgba(30,41,59,0.82),
+                rgba(15,23,42,0.84)
+            );
 
-    transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
+        border:
+            1px solid
+            rgba(148,163,184,0.13);
+
+        box-shadow:
+            0 15px 40px
+            rgba(0,0,0,0.16);
+
+        transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease,
+            border-color 0.2s ease;
     }
 
     .kpi-card-native:hover {
-    transform: translateY(-4px);
+        transform:
+            translateY(-4px);
 
-    border-color:
-    rgba(129,140,248,0.45);
+        border-color:
+            rgba(129,140,248,0.45);
 
-    box-shadow:
-    0 20px 50px
-    rgba(99,102,241,0.18);
+        box-shadow:
+            0 20px 50px
+            rgba(99,102,241,0.18);
     }
 
     .kpi-icon-native {
-    font-size: 1.5rem;
-    margin-bottom: 0.5rem;
+        font-size: 1.5rem;
+
+        margin-bottom:
+            0.5rem;
     }
 
     .kpi-title-native {
-    color: #94a3b8;
-    font-size: 0.75rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+        color: #94a3b8;
+
+        font-size: 0.75rem;
+
+        font-weight: 800;
+
+        text-transform:
+            uppercase;
+
+        letter-spacing:
+            0.08em;
     }
 
     .kpi-text-native {
-    color: #f8fafc;
-    font-size: 1rem;
-    font-weight: 700;
-    margin-top: 0.35rem;
+        color: #f8fafc;
+
+        font-size: 1rem;
+
+        font-weight: 700;
+
+        margin-top:
+            0.35rem;
     }
+
+
+    /* ========================================================
+       SECTION LABELS
+    ======================================================== */
 
     .section-eyebrow-native {
-    color: #818cf8;
-    font-size: 0.72rem;
-    font-weight: 850;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-    margin-top: 1.8rem;
-    margin-bottom: 0.35rem;
+        color: #818cf8;
+
+        font-size: 0.72rem;
+
+        font-weight: 850;
+
+        letter-spacing:
+            0.13em;
+
+        text-transform:
+            uppercase;
+
+        margin-top:
+            1.8rem;
+
+        margin-bottom:
+            0.35rem;
     }
 
+
+    /* ========================================================
+       EXPLORE CARDS
+    ======================================================== */
+
     .explore-card-native {
-    min-height: 195px;
-    padding: 1.25rem;
-    border-radius: 20px;
+        min-height: 195px;
 
-    background:
-    linear-gradient(
-    145deg,
-    rgba(30,41,59,0.82),
-    rgba(15,23,42,0.82)
-    );
+        padding: 1.25rem;
 
-    border:
-    1px solid
-    rgba(148,163,184,0.12);
+        border-radius: 20px;
 
-    box-shadow:
-    0 15px 40px
-    rgba(0,0,0,0.14);
+        background:
+            linear-gradient(
+                145deg,
+                rgba(30,41,59,0.82),
+                rgba(15,23,42,0.82)
+            );
 
-    transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
+        border:
+            1px solid
+            rgba(148,163,184,0.12);
+
+        box-shadow:
+            0 15px 40px
+            rgba(0,0,0,0.14);
+
+        transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease,
+            border-color 0.2s ease;
     }
 
     .explore-card-native:hover {
-    transform: translateY(-4px);
+        transform:
+            translateY(-4px);
 
-    border-color:
-    rgba(168,85,247,0.45);
+        border-color:
+            rgba(168,85,247,0.45);
 
-    box-shadow:
-    0 20px 50px
-    rgba(168,85,247,0.18);
+        box-shadow:
+            0 20px 50px
+            rgba(168,85,247,0.18);
     }
 
     .explore-icon-native {
-    font-size: 2rem;
-    margin-bottom: 0.65rem;
+        font-size: 2rem;
+
+        margin-bottom:
+            0.65rem;
     }
 
     .explore-title-native {
-    color: #f8fafc;
-    font-size: 0.98rem;
-    font-weight: 800;
-    margin-bottom: 0.45rem;
+        color: #f8fafc;
+
+        font-size: 0.98rem;
+
+        font-weight: 800;
+
+        margin-bottom:
+            0.45rem;
     }
 
     .explore-description-native {
-    color: #94a3b8;
-    font-size: 0.80rem;
-    line-height: 1.6;
+        color: #94a3b8;
+
+        font-size: 0.80rem;
+
+        line-height: 1.6;
     }
 
+
+    /* ========================================================
+       BUTTONS
+    ======================================================== */
+
     .stButton > button {
-    min-height: 44px;
-    border-radius: 12px;
-    font-weight: 700;
+        min-height: 44px;
 
-    border:
-    1px solid
-    rgba(148,163,184,0.18);
+        border-radius: 12px;
 
-    background:
-    rgba(30,41,59,0.72);
+        font-weight: 700;
 
-    color: #f8fafc;
+        border:
+            1px solid
+            rgba(148,163,184,0.18);
 
-    transition: all 0.2s ease;
+        background:
+            rgba(30,41,59,0.72);
+
+        color: #f8fafc;
+
+        transition:
+            all 0.2s ease;
     }
 
     .stButton > button:hover {
-    transform: translateY(-2px);
+        transform:
+            translateY(-2px);
 
-    border-color:
-    rgba(129,140,248,0.55);
+        border-color:
+            rgba(129,140,248,0.55);
 
-    background:
-    rgba(51,65,85,0.92);
+        background:
+            rgba(51,65,85,0.92);
     }
 
     button[kind="primary"] {
-    background:
-    linear-gradient(
-    135deg,
-    #6366f1,
-    #8b5cf6
-    ) !important;
+        background:
+            linear-gradient(
+                135deg,
+                #6366f1,
+                #8b5cf6
+            ) !important;
 
-    border: none !important;
-    color: white !important;
+        border:
+            none !important;
 
-    box-shadow:
-    0 12px 30px
-    rgba(99,102,241,0.25);
+        color:
+            white !important;
+
+        box-shadow:
+            0 12px 30px
+            rgba(99,102,241,0.25);
     }
 
     button[kind="primary"]:hover {
-    background:
-    linear-gradient(
-    135deg,
-    #818cf8,
-    #a78bfa
-    ) !important;
+        background:
+            linear-gradient(
+                135deg,
+                #818cf8,
+                #a78bfa
+            ) !important;
 
-    box-shadow:
-    0 15px 35px
-    rgba(99,102,241,0.35);
+        box-shadow:
+            0 15px 35px
+            rgba(99,102,241,0.35);
     }
 
+
+    /* ========================================================
+       TEXT AREA
+    ======================================================== */
+
     textarea {
-    border-radius: 18px !important;
+        border-radius:
+            18px !important;
 
-    background:
-    rgba(15,23,42,0.88) !important;
+        background:
+            rgba(15,23,42,0.88) !important;
 
-    color: #f8fafc !important;
+        color:
+            #f8fafc !important;
 
-    border:
-    1px solid
-    rgba(148,163,184,0.16) !important;
+        border:
+            1px solid
+            rgba(148,163,184,0.16) !important;
     }
 
     textarea:focus {
-    border:
-    1px solid
-    rgba(129,140,248,0.7) !important;
+        border:
+            1px solid
+            rgba(129,140,248,0.7) !important;
 
-    box-shadow:
-    0 0 0 1px
-    rgba(129,140,248,0.25) !important;
+        box-shadow:
+            0 0 0 1px
+            rgba(129,140,248,0.25) !important;
     }
+
+
+    /* ========================================================
+       RESULT HEADER
+    ======================================================== */
 
     .result-header-native {
-    padding: 1.5rem 1.7rem;
-    border-radius: 20px;
+        padding:
+            1.5rem
+            1.7rem;
 
-    background:
-    linear-gradient(
-    135deg,
-    rgba(30,41,59,0.84),
-    rgba(15,23,42,0.86)
-    );
+        border-radius:
+            20px;
 
-    border:
-    1px solid
-    rgba(129,140,248,0.18);
+        background:
+            linear-gradient(
+                135deg,
+                rgba(30,41,59,0.84),
+                rgba(15,23,42,0.86)
+            );
 
-    margin-bottom: 1rem;
+        border:
+            1px solid
+            rgba(129,140,248,0.18);
+
+        margin-bottom:
+            1rem;
     }
 
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-    padding: 0.4rem;
-    border-radius: 22px !important;
 
-    background:
-    rgba(15,23,42,0.84);
-
-    border:
-    1px solid
-    rgba(148,163,184,0.13) !important;
-
-    box-shadow:
-    0 20px 55px
-    rgba(0,0,0,0.18);
-    }
+    /* ========================================================
+       INSIGHT LABEL
+    ======================================================== */
 
     .insight-label-native {
-    color: #a5b4fc;
-    font-size: 0.75rem;
-    font-weight: 850;
-    text-transform: uppercase;
-    letter-spacing: 0.10em;
-    margin-bottom: 0.8rem;
+        color:
+            #a5b4fc;
+
+        font-size:
+            0.75rem;
+
+        font-weight:
+            850;
+
+        text-transform:
+            uppercase;
+
+        letter-spacing:
+            0.10em;
+
+        margin-bottom:
+            0.8rem;
     }
+
+
+    /* ========================================================
+       RESULT CONTAINER
+    ======================================================== */
+
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        padding:
+            0.4rem;
+
+        border-radius:
+            22px !important;
+
+        background:
+            rgba(15,23,42,0.84);
+
+        border:
+            1px solid
+            rgba(148,163,184,0.13) !important;
+
+        box-shadow:
+            0 20px 55px
+            rgba(0,0,0,0.18);
+    }
+
+
+    /* ========================================================
+       ACTION CARD
+    ======================================================== */
 
     .action-card-native {
-    padding: 1.25rem;
-    border-radius: 16px;
+        padding:
+            1.25rem;
 
-    background:
-    rgba(30,41,59,0.68);
+        border-radius:
+            16px;
 
-    border:
-    1px solid
-    rgba(148,163,184,0.10);
+        background:
+            rgba(30,41,59,0.68);
 
-    margin-top: 1rem;
+        border:
+            1px solid
+            rgba(148,163,184,0.10);
+
+        margin-top:
+            1rem;
     }
 
+
+    /* ========================================================
+       EMPTY STATE
+    ======================================================== */
+
     .empty-state-native {
-    padding: 3rem;
-    text-align: center;
-    border-radius: 24px;
+        padding:
+            3rem;
 
-    background:
-    rgba(15,23,42,0.55);
+        text-align:
+            center;
 
-    border:
-    1px dashed
-    rgba(148,163,184,0.20);
+        border-radius:
+            24px;
 
-    margin-top: 1.5rem;
+        background:
+            rgba(15,23,42,0.55);
+
+        border:
+            1px dashed
+            rgba(148,163,184,0.20);
+
+        margin-top:
+            1.5rem;
     }
 
     .empty-icon-native {
-    font-size: 3rem;
-    margin-bottom: 0.8rem;
+        font-size:
+            3rem;
+
+        margin-bottom:
+            0.8rem;
     }
 
     .empty-title-native {
-    font-size: 1.2rem;
-    font-weight: 800;
-    color: #f8fafc;
+        font-size:
+            1.2rem;
+
+        font-weight:
+            800;
+
+        color:
+            #f8fafc;
     }
 
     .empty-description-native {
-    color: #94a3b8;
-    max-width: 650px;
-    margin: 0.5rem auto 0;
+        color:
+            #94a3b8;
+
+        max-width:
+            650px;
+
+        margin:
+            0.5rem auto 0;
     }
+
+
+    /* ========================================================
+       FOOTER
+    ======================================================== */
 
     .footer-native {
-    text-align: center;
-    color: #64748b;
-    font-size: 0.78rem;
-    padding-top: 3rem;
-    margin-top: 4rem;
+        text-align:
+            center;
 
-    border-top:
-    1px solid
-    rgba(148,163,184,0.08);
+        color:
+            #64748b;
+
+        font-size:
+            0.78rem;
+
+        padding-top:
+            3rem;
+
+        margin-top:
+            4rem;
+
+        border-top:
+            1px solid
+            rgba(148,163,184,0.08);
     }
+
+
+    /* ========================================================
+       MOBILE
+    ======================================================== */
 
     @media (max-width: 768px) {
 
-    .hero-container {
-    padding: 2rem 1.4rem;
-    }
+        .hero-container {
+            padding:
+                2rem
+                1.4rem;
+        }
 
-    .hero-title-native {
-    font-size: 2rem;
-    }
+        .hero-title-native {
+            font-size:
+                2rem;
+        }
 
-    .kpi-card-native {
-    min-height: 110px;
-    }
+        .kpi-card-native {
+            min-height:
+                110px;
+        }
 
     }
 
@@ -637,9 +845,13 @@ if "auto_analyze" not in st.session_state:
 
 try:
 
-    groq_api_key = st.secrets["GROQ_API_KEY"]
+    groq_api_key = st.secrets[
+        "GROQ_API_KEY"
+    ]
 
-    os.environ["GROQ_API_KEY"] = groq_api_key
+    os.environ[
+        "GROQ_API_KEY"
+    ] = groq_api_key
 
 except Exception:
 
@@ -648,9 +860,13 @@ except Exception:
 
 try:
 
-    hf_token = st.secrets["HF_TOKEN"]
+    hf_token = st.secrets[
+        "HF_TOKEN"
+    ]
 
-    os.environ["HF_TOKEN"] = hf_token
+    os.environ[
+        "HF_TOKEN"
+    ] = hf_token
 
 except Exception:
 
@@ -663,7 +879,9 @@ except Exception:
 
 with st.sidebar:
 
-    st.markdown("## 🚀 MarketPulse AI")
+    st.markdown(
+        "## 🚀 MarketPulse AI"
+    )
 
     st.caption(
         "AI-powered Marketing Intelligence"
@@ -925,8 +1143,11 @@ for i, item in enumerate(
         ):
 
             st.session_state.query = question
+
             st.session_state.result = None
+
             st.session_state.analysis_complete = False
+
             st.session_state.auto_analyze = True
 
             st.rerun()
@@ -954,11 +1175,15 @@ st.caption(
 
 query = st.text_area(
     "Marketing Question",
+
     value=st.session_state.query,
+
     placeholder=(
         "Example: Which content themes drive the most engagement?"
     ),
+
     height=120,
+
     label_visibility="collapsed",
 )
 
@@ -973,6 +1198,7 @@ st.session_state.query = query
 st.markdown(
     "**💬 Try asking:**"
 )
+
 
 suggested_questions = [
 
@@ -1003,8 +1229,11 @@ for i, question in enumerate(
         ):
 
             st.session_state.query = question
+
             st.session_state.result = None
+
             st.session_state.analysis_complete = False
+
             st.session_state.auto_analyze = True
 
             st.rerun()
@@ -1027,7 +1256,9 @@ analyze_clicked = st.button(
 # DOWNLOAD CHROMA FROM HUGGING FACE
 # ============================================================
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(
+    show_spinner=False
+)
 def get_chroma_directory():
 
     local_chroma = os.path.join(
@@ -1035,14 +1266,18 @@ def get_chroma_directory():
         "chroma_store",
     )
 
-    if os.path.isdir(local_chroma):
+    if os.path.isdir(
+        local_chroma
+    ):
 
         return local_chroma
 
 
     try:
 
-        hf_token = st.secrets["HF_TOKEN"]
+        hf_token = st.secrets[
+            "HF_TOKEN"
+        ]
 
     except Exception:
 
@@ -1057,8 +1292,11 @@ def get_chroma_directory():
 
         snapshot_path = snapshot_download(
             repo_id=HF_REPO_ID,
+
             repo_type="dataset",
+
             token=hf_token,
+
             allow_patterns=[
                 "chroma_store/**",
             ],
@@ -1071,7 +1309,9 @@ def get_chroma_directory():
     )
 
 
-    if not os.path.isdir(chroma_directory):
+    if not os.path.isdir(
+        chroma_directory
+    ):
 
         raise FileNotFoundError(
             "Downloaded Chroma store was not found."
@@ -1086,11 +1326,15 @@ def get_chroma_directory():
 # ============================================================
 
 @st.cache_resource(
-    show_spinner="🚀 Loading MarketPulse AI intelligence engine..."
+    show_spinner=(
+        "🚀 Loading MarketPulse AI intelligence engine..."
+    )
 )
 def get_vectorstore():
 
-    chroma_directory = get_chroma_directory()
+    chroma_directory = (
+        get_chroma_directory()
+    )
 
     return load_vectorstore(
         chroma_directory
@@ -1193,8 +1437,11 @@ if should_analyze:
 
                 result = generate_answer(
                     current_query,
+
                     vectorstore,
+
                     llm,
+
                     k=5,
                 )
 
@@ -1250,7 +1497,9 @@ if (
             "from the AI engine."
         )
 
-        st.write(result)
+        st.write(
+            result
+        )
 
 
     else:
@@ -1269,6 +1518,10 @@ if (
 
         st.divider()
 
+
+        # ====================================================
+        # ANALYSIS HEADER
+        # ====================================================
 
         render_html(
             """
@@ -1292,14 +1545,22 @@ if (
         )
 
 
+        # ====================================================
+        # AI ANALYSIS LABEL
+        # ====================================================
+
         render_html(
             """
-            iv class="insight-label-native">'
-            '🧠 AI Marketing Analysis'
-            '</di
+            <div class="insight-label-native">
+            🧠 AI Marketing Analysis
+            </div>
             """
         )
 
+
+        # ====================================================
+        # AI ANSWER
+        # ====================================================
 
         with st.container(
             border=True
@@ -1307,7 +1568,9 @@ if (
 
             if answer:
 
-                st.markdown(answer)
+                st.markdown(
+                    answer
+                )
 
             else:
 
@@ -1315,6 +1578,10 @@ if (
                     "No AI analysis was returned."
                 )
 
+
+        # ====================================================
+        # RECOMMENDED NEXT STEP
+        # ====================================================
 
         render_html(
             """
@@ -1338,11 +1605,15 @@ if (
         st.markdown("")
 
 
+        # ====================================================
+        # EVIDENCE LAYER
+        # ====================================================
+
         render_html(
             """
-            iv class="section-eyebrow-native">'
-            'EVIDENCE LAYER'
-            '</di
+            <div class="section-eyebrow-native">
+            EVIDENCE LAYER
+            </div>
             """
         )
 
