@@ -1,31 +1,32 @@
 """
 07_prompting.py
 -----------------
-Pipeline stage 7: PROMPTING + VERIFIED ANALYTICS
+Pipeline stage 7: PROMPTING + DETERMINISTIC ANALYTICS
 
 MarketPulse AI
-Premium AI-powered Marketing Intelligence
 
-Pipeline:
-1. Retrieve relevant documents from Chroma.
-2. Extract measurable metrics using Python.
-3. Calculate verified metric leaders.
-4. Build a verified analytics summary.
-5. Send verified evidence to the LLM.
-6. Let the LLM interpret the evidence and generate recommendations.
+Architecture:
+1. Retrieve relevant documents.
+2. Parse measurable engagement metrics with Python.
+3. Calculate deterministic engagement scores.
+4. Rank content using Python.
+5. Build an analytics summary.
+6. Send verified calculations + retrieved evidence to the LLM.
+7. Let the LLM interpret the evidence and generate recommendations.
 
 Important:
-- Python handles numerical comparisons.
-- The LLM handles interpretation and marketing intelligence.
-- No invented engagement scores.
-- Views are separated from engagement metrics.
-- Source attribution is preserved.
+- Python is responsible for calculations and rankings.
+- The LLM is responsible for interpretation and recommendations.
+- The LLM must never recalculate or override Python results.
+- All factual claims must remain grounded in retrieved sources.
+- Raw sources are returned to the Streamlit UI.
 """
 
 import importlib.util
 import os
 import re
-from statistics import mean
+from typing import Any, Dict, List, Optional
+
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -47,9 +48,12 @@ BASE_DIR = os.path.dirname(
 # ============================================================
 
 def _import(
-    module_filename,
-    module_name,
+    module_filename: str,
+    module_name: str,
 ):
+    """
+    Dynamically import another pipeline module.
+    """
 
     path = os.path.join(
         BASE_DIR,
@@ -62,7 +66,6 @@ def _import(
     )
 
     if spec is None or spec.loader is None:
-
         raise ImportError(
             f"Could not load module: {module_filename}"
         )
@@ -79,7 +82,7 @@ def _import(
 
 
 # ============================================================
-# RETRIEVAL MODULE
+# LOAD RETRIEVAL MODULE
 # ============================================================
 
 _retrieve = _import(
@@ -92,9 +95,11 @@ load_vectorstore = (
     _retrieve.load_vectorstore
 )
 
+
 retrieve_context = (
     _retrieve.retrieve_context
 )
+
 
 format_context = (
     _retrieve.format_context
@@ -102,7 +107,7 @@ format_context = (
 
 
 # ============================================================
-# DEFAULT MODEL
+# MODEL CONFIG
 # ============================================================
 
 DEFAULT_MODEL = (
@@ -111,576 +116,635 @@ DEFAULT_MODEL = (
 
 
 # ============================================================
-# METRIC EXTRACTION HELPERS
+# ENGAGEMENT METRIC CONFIG
 # ============================================================
 
-def _extract_number(
-    text,
-    label,
-):
-    """
-    Extract a numeric metric from retrieved content.
+ENGAGEMENT_FIELDS = [
+    "likes",
+    "comments",
+    "shares",
+]
 
-    Example:
-    Likes: 1551
-    Views: 10106
+
+# ============================================================
+# METRIC EXTRACTION
+# ============================================================
+
+def extract_engagement_metrics(
+    text: str,
+) -> Dict[str, Optional[int]]:
+    """
+    Extract engagement metrics from document text.
+
+    Expected source format:
+
+    Engagement:
+    1551 Likes,
+    199 Comments,
+    310 Shares,
+    10106 Views
+
+    Returns:
+
+    {
+        "likes": 1551,
+        "comments": 199,
+        "shares": 310,
+        "views": 10106,
+    }
+
+    Missing values are returned as None.
     """
 
     if not text:
+        return {
+            "likes": None,
+            "comments": None,
+            "shares": None,
+            "views": None,
+        }
 
-        return None
+    text = str(text)
 
-    pattern = (
-        rf"{label}\s*:\s*"
-        rf"([\d,]+)"
-    )
-
-    match = re.search(
-        pattern,
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    if not match:
-
-        return None
-
-    value = (
-        match.group(1)
-        .replace(",", "")
-    )
-
-    try:
-
-        return int(value)
-
-    except ValueError:
-
-        return None
-
-
-# ============================================================
-# EXTRACT DOCUMENT METRICS
-# ============================================================
-
-def extract_document_metrics(
-    doc,
-    source_number,
-):
-    """
-    Extract structured marketing metrics
-    from a retrieved LangChain document.
-    """
-
-    metadata = (
-        getattr(
-            doc,
-            "metadata",
-            {}
-        )
-        or {}
-    )
-
-    content = (
-        getattr(
-            doc,
-            "page_content",
-            ""
-        )
-        or ""
-    )
-
-
-    # --------------------------------------------------------
-    # CONTENT ID
-    # --------------------------------------------------------
-
-    content_id = metadata.get(
-        "content_id"
-    )
-
-    if not content:
-
-        match = re.search(
-            r"Content\s*ID\s*:\s*([A-Za-z0-9_-]+)",
-            content,
-            flags=re.IGNORECASE,
-        )
-
-        if match:
-
-            content_id = (
-                match.group(1)
-            )
-
-    if not content_id:
-
-        content_id = (
-            f"Unknown Content {source_number}"
-        )
-
-
-    # --------------------------------------------------------
-    # PLATFORM
-    # --------------------------------------------------------
-
-    platform = metadata.get(
-        "platform"
-    )
-
-    if not platform:
-
-        match = re.search(
-            r"Platform\s*:\s*([^\n]+)",
-            content,
-            flags=re.IGNORECASE,
-        )
-
-        if match:
-
-            platform = (
-                match.group(1)
-                .strip()
-            )
-
-    if not platform:
-
-        platform = "Unknown"
-
-
-    # --------------------------------------------------------
-    # CATEGORY
-    # --------------------------------------------------------
-
-    category = metadata.get(
-        "category"
-    )
-
-    if not category:
-
-        match = re.search(
-            r"Category\s*:\s*([^\n]+)",
-            content,
-            flags=re.IGNORECASE,
-        )
-
-        if match:
-
-            category = (
-                match.group(1)
-                .strip()
-            )
-
-    if not category:
-
-        category = "Unknown"
-
-
-    # --------------------------------------------------------
-    # METRICS
-    # --------------------------------------------------------
-
-    views = _extract_number(
-        content,
-        "Views",
-    )
-
-    likes = _extract_number(
-        content,
-        "Likes",
-    )
-
-    comments = _extract_number(
-        content,
-        "Comments",
-    )
-
-    shares = _extract_number(
-        content,
-        "Shares",
-    )
-
-
-    return {
-
-        "source": source_number,
-
-        "content_id": content_id,
-
-        "platform": platform,
-
-        "category": category,
-
-        "views": views,
-
-        "likes": likes,
-
-        "comments": comments,
-
-        "shares": shares,
-
+    patterns = {
+        "likes": r"([\d,]+)\s+Likes?",
+        "comments": r"([\d,]+)\s+Comments?",
+        "shares": r"([\d,]+)\s+Shares?",
+        "views": r"([\d,]+)\s+Views?",
     }
 
+    metrics = {}
+
+    for metric_name, pattern in patterns.items():
+
+        match = re.search(
+            pattern,
+            text,
+            flags=re.IGNORECASE,
+        )
+
+        if match:
+
+            raw_value = (
+                match.group(1)
+                .replace(",", "")
+                .strip()
+            )
+
+            try:
+
+                metrics[metric_name] = int(
+                    raw_value
+                )
+
+            except ValueError:
+
+                metrics[metric_name] = None
+
+        else:
+
+            metrics[metric_name] = None
+
+    return metrics
+
 
 # ============================================================
-# BUILD VERIFIED ANALYTICS
+# ENGAGEMENT SCORE
 # ============================================================
 
-def build_verified_analytics(
-    docs,
-):
+def calculate_engagement_score(
+    metrics: Dict[str, Optional[int]],
+) -> Optional[int]:
     """
-    Calculate verified rankings using Python.
+    Calculate a deterministic engagement score.
 
-    The LLM does NOT calculate these values.
+    Engagement Score =
+    Likes + Comments + Shares
 
-    This prevents errors such as:
-    claiming 10,106 Views is higher than 10,164 Views.
+    Views are intentionally excluded from the score
+    because views represent reach/exposure rather than
+    direct engagement actions.
     """
 
-    records = []
+    values = []
+
+    for field in ENGAGEMENT_FIELDS:
+
+        value = metrics.get(
+            field
+        )
+
+        if value is not None:
+
+            values.append(
+                value
+            )
+
+    if not values:
+
+        return None
+
+    return sum(
+        values
+    )
+
+
+# ============================================================
+# DOCUMENT ANALYTICS
+# ============================================================
+
+def analyze_documents(
+    docs: list,
+) -> List[Dict[str, Any]]:
+    """
+    Parse retrieved documents and calculate
+    deterministic engagement metrics.
+
+    Python performs all calculations here.
+
+    The LLM does NOT calculate rankings.
+    """
+
+    analyzed = []
 
     for index, doc in enumerate(
         docs,
         start=1,
     ):
 
-        record = extract_document_metrics(
+        metadata = (
+            getattr(
+                doc,
+                "metadata",
+                {},
+            )
+            or {}
+        )
+
+        page_content = getattr(
             doc,
-            index,
+            "page_content",
+            "",
         )
 
-        records.append(
-            record
+        metrics = extract_engagement_metrics(
+            page_content
         )
 
-
-    # --------------------------------------------------------
-    # METRIC LEADER HELPER
-    # --------------------------------------------------------
-
-    def get_leader(
-        metric_name,
-    ):
-
-        valid_records = [
-
-            record
-
-            for record in records
-
-            if record.get(
-                metric_name
-            ) is not None
-
-        ]
-
-        if not valid_records:
-
-            return None
-
-        return max(
-            valid_records,
-            key=lambda x: x[
-                metric_name
-            ],
+        engagement_score = (
+            calculate_engagement_score(
+                metrics
+            )
         )
 
-
-    # --------------------------------------------------------
-    # LEADERS
-    # --------------------------------------------------------
-
-    highest_views = get_leader(
-        "views"
-    )
-
-    highest_likes = get_leader(
-        "likes"
-    )
-
-    highest_comments = get_leader(
-        "comments"
-    )
-
-    highest_shares = get_leader(
-        "shares"
-    )
-
-
-    # --------------------------------------------------------
-    # AVERAGES
-    # --------------------------------------------------------
-
-    def calculate_average(
-        metric_name,
-    ):
-
-        values = [
-
-            record[metric_name]
-
-            for record in records
-
-            if record.get(
-                metric_name
-            ) is not None
-
-        ]
-
-        if not values:
-
-            return None
-
-        return round(
-            mean(values),
-            2,
+        platform = metadata.get(
+            "platform",
+            "Unknown",
         )
 
+        category = metadata.get(
+            "category",
+            "Unknown",
+        )
 
-    average_views = calculate_average(
-        "views"
+        content_id = metadata.get(
+            "content_id",
+            f"Source_{index}",
+        )
+
+        analyzed.append(
+            {
+                "source_number": index,
+                "content_id": content_id,
+                "platform": platform,
+                "category": category,
+                "likes": metrics.get(
+                    "likes"
+                ),
+                "comments": metrics.get(
+                    "comments"
+                ),
+                "shares": metrics.get(
+                    "shares"
+                ),
+                "views": metrics.get(
+                    "views"
+                ),
+                "engagement_score": (
+                    engagement_score
+                ),
+            }
+        )
+
+    return analyzed
+
+
+# ============================================================
+# SORT CONTENT
+# ============================================================
+
+def rank_content(
+    analyzed_docs: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Rank content deterministically by engagement score.
+
+    Secondary ranking:
+    - Likes
+    - Comments
+    - Shares
+
+    Content with missing engagement score
+    is placed at the bottom.
+    """
+
+    return sorted(
+        analyzed_docs,
+        key=lambda item: (
+            item.get(
+                "engagement_score"
+            )
+            if item.get(
+                "engagement_score"
+            )
+            is not None
+            else -1,
+
+            item.get(
+                "likes"
+            )
+            if item.get(
+                "likes"
+            )
+            is not None
+            else -1,
+
+            item.get(
+                "comments"
+            )
+            if item.get(
+                "comments"
+            )
+            is not None
+            else -1,
+
+            item.get(
+                "shares"
+            )
+            if item.get(
+                "shares"
+            )
+            is not None
+            else -1,
+        ),
+        reverse=True,
     )
 
-    average_likes = calculate_average(
-        "likes"
+
+# ============================================================
+# BUILD ANALYTICS SUMMARY
+# ============================================================
+
+def build_analytics_summary(
+    analyzed_docs: List[Dict[str, Any]],
+) -> str:
+    """
+    Build a deterministic analytics summary for the LLM.
+
+    All rankings and numerical conclusions are calculated
+    by Python before the prompt reaches the LLM.
+    """
+
+    if not analyzed_docs:
+
+        return (
+            "No measurable engagement data was found "
+            "in the retrieved sources."
+        )
+
+    ranked = rank_content(
+        analyzed_docs
     )
-
-    average_comments = calculate_average(
-        "comments"
-    )
-
-    average_shares = calculate_average(
-        "shares"
-    )
-
-
-    # --------------------------------------------------------
-    # BUILD VERIFIED SUMMARY
-    # --------------------------------------------------------
 
     lines = []
 
     lines.append(
-        "VERIFIED ANALYTICS SUMMARY"
+        "=== VERIFIED PYTHON ANALYTICS ==="
     )
 
     lines.append(
-        "The following values were calculated "
-        "programmatically from the retrieved documents."
+        "The following calculations were performed "
+        "deterministically by Python."
     )
 
     lines.append(
-        "The LLM must treat these values as verified "
-        "for the retrieved sample."
+        "The LLM MUST NOT recalculate, change, "
+        "or override these rankings."
     )
 
     lines.append("")
 
+    # --------------------------------------------------------
+    # TOP CONTENT
+    # --------------------------------------------------------
+
+    ranked_with_scores = [
+        item
+        for item in ranked
+        if item.get(
+            "engagement_score"
+        )
+        is not None
+    ]
+
+    if ranked_with_scores:
+
+        top = ranked_with_scores[0]
+
+        lines.append(
+            "TOP PERFORMING CONTENT "
+            "(by Engagement Score):"
+        )
+
+        lines.append(
+            f"- Content ID: "
+            f"{top['content_id']}"
+        )
+
+        lines.append(
+            f"- Source: "
+            f"[Source {top['source_number']}]"
+        )
+
+        lines.append(
+            f"- Platform: "
+            f"{top['platform']}"
+        )
+
+        lines.append(
+            f"- Category: "
+            f"{top['category']}"
+        )
+
+        lines.append(
+            f"- Likes: "
+            f"{top['likes']}"
+        )
+
+        lines.append(
+            f"- Comments: "
+            f"{top['comments']}"
+        )
+
+        lines.append(
+            f"- Shares: "
+            f"{top['shares']}"
+        )
+
+        lines.append(
+            f"- Engagement Score: "
+            f"{top['engagement_score']}"
+        )
+
+        if top.get(
+            "views"
+        ) is not None:
+
+            lines.append(
+                f"- Views: "
+                f"{top['views']}"
+            )
+
+        lines.append("")
 
     # --------------------------------------------------------
-    # DATASET SIZE
+    # RANKING TABLE
     # --------------------------------------------------------
 
     lines.append(
-        f"Retrieved content items: {len(records)}"
+        "CONTENT RANKING:"
     )
+
+    for rank, item in enumerate(
+        ranked,
+        start=1,
+    ):
+
+        score = item.get(
+            "engagement_score"
+        )
+
+        score_text = (
+            str(score)
+            if score is not None
+            else "N/A"
+        )
+
+        lines.append(
+            f"{rank}. "
+            f"{item['content_id']} | "
+            f"{item['platform']} | "
+            f"{item['category']} | "
+            f"Score: {score_text} | "
+            f"Likes: {item['likes']} | "
+            f"Comments: {item['comments']} | "
+            f"Shares: {item['shares']} | "
+            f"Views: {item['views']} | "
+            f"[Source {item['source_number']}]"
+        )
 
     lines.append("")
 
-
     # --------------------------------------------------------
-    # HIGHEST VIEWS
-    # --------------------------------------------------------
-
-    if highest_views:
-
-        lines.append(
-            "Highest Views:"
-        )
-
-        lines.append(
-            f"- {highest_views['content_id']} "
-            f"with {highest_views['views']:,} Views "
-            f"[Source {highest_views['source']}]"
-        )
-
-    else:
-
-        lines.append(
-            "Highest Views: Not available"
-        )
-
-
-    # --------------------------------------------------------
-    # HIGHEST LIKES
+    # PLATFORM SUMMARY
     # --------------------------------------------------------
 
-    if highest_likes:
+    platform_groups = {}
 
-        lines.append(
-            "Highest Likes:"
+    for item in analyzed_docs:
+
+        score = item.get(
+            "engagement_score"
         )
 
-        lines.append(
-            f"- {highest_likes['content_id']} "
-            f"with {highest_likes['likes']:,} Likes "
-            f"[Source {highest_likes['source']}]"
+        platform = item.get(
+            "platform",
+            "Unknown",
         )
 
-    else:
+        if score is None:
+            continue
 
-        lines.append(
-            "Highest Likes: Not available"
+        platform_groups.setdefault(
+            platform,
+            [],
+        ).append(
+            score
         )
 
+    if platform_groups:
+
+        lines.append(
+            "PLATFORM ENGAGEMENT SUMMARY:"
+        )
+
+        platform_averages = []
+
+        for platform, scores in (
+            platform_groups.items()
+        ):
+
+            average_score = (
+                sum(scores)
+                / len(scores)
+            )
+
+            platform_averages.append(
+                (
+                    platform,
+                    average_score,
+                    len(scores),
+                )
+            )
+
+        platform_averages.sort(
+            key=lambda x: x[1],
+            reverse=True,
+        )
+
+        for (
+            platform,
+            average_score,
+            count,
+        ) in platform_averages:
+
+            lines.append(
+                f"- {platform}: "
+                f"Average Engagement Score = "
+                f"{average_score:.2f} "
+                f"across {count} content item(s)."
+            )
+
+        lines.append("")
 
     # --------------------------------------------------------
-    # HIGHEST COMMENTS
+    # CATEGORY SUMMARY
     # --------------------------------------------------------
 
-    if highest_comments:
+    category_groups = {}
 
-        lines.append(
-            "Highest Comments:"
+    for item in analyzed_docs:
+
+        score = item.get(
+            "engagement_score"
         )
 
-        lines.append(
-            f"- {highest_comments['content_id']} "
-            f"with {highest_comments['comments']:,} Comments "
-            f"[Source {highest_comments['source']}]"
+        category = item.get(
+            "category",
+            "Unknown",
         )
 
-    else:
+        if score is None:
+            continue
 
-        lines.append(
-            "Highest Comments: Not available"
+        category_groups.setdefault(
+            category,
+            [],
+        ).append(
+            score
         )
 
+    if category_groups:
+
+        lines.append(
+            "CATEGORY ENGAGEMENT SUMMARY:"
+        )
+
+        category_averages = []
+
+        for category, scores in (
+            category_groups.items()
+        ):
+
+            average_score = (
+                sum(scores)
+                / len(scores)
+            )
+
+            category_averages.append(
+                (
+                    category,
+                    average_score,
+                    len(scores),
+                )
+            )
+
+        category_averages.sort(
+            key=lambda x: x[1],
+            reverse=True,
+        )
+
+        for (
+            category,
+            average_score,
+            count,
+        ) in category_averages:
+
+            lines.append(
+                f"- {category}: "
+                f"Average Engagement Score = "
+                f"{average_score:.2f} "
+                f"across {count} content item(s)."
+            )
+
+        lines.append("")
 
     # --------------------------------------------------------
-    # HIGHEST SHARES
+    # METRIC LEADERS
     # --------------------------------------------------------
 
-    if highest_shares:
+    lines.append(
+        "METRIC LEADERS:"
+    )
 
-        lines.append(
-            "Highest Shares:"
+    for metric in [
+        "likes",
+        "comments",
+        "shares",
+        "views",
+    ]:
+
+        available = [
+            item
+            for item in analyzed_docs
+            if item.get(
+                metric
+            )
+            is not None
+        ]
+
+        if not available:
+            continue
+
+        leader = max(
+            available,
+            key=lambda item: item.get(
+                metric
+            ),
         )
 
         lines.append(
-            f"- {highest_shares['content_id']} "
-            f"with {highest_shares['shares']:,} Shares "
-            f"[Source {highest_shares['source']}]"
+            f"- Highest {metric.title()}: "
+            f"{leader['content_id']} "
+            f"with {leader[metric]} "
+            f"[Source {leader['source_number']}]"
         )
-
-    else:
-
-        lines.append(
-            "Highest Shares: Not available"
-        )
-
-
-    # --------------------------------------------------------
-    # AVERAGES
-    # --------------------------------------------------------
 
     lines.append("")
 
     lines.append(
-        "Retrieved Sample Averages:"
+        "=== END VERIFIED PYTHON ANALYTICS ==="
     )
-
-
-    if average_views is not None:
-
-        lines.append(
-            f"- Average Views: "
-            f"{average_views:,}"
-        )
-
-
-    if average_likes is not None:
-
-        lines.append(
-            f"- Average Likes: "
-            f"{average_likes:,}"
-        )
-
-
-    if average_comments is not None:
-
-        lines.append(
-            f"- Average Comments: "
-            f"{average_comments:,}"
-        )
-
-
-    if average_shares is not None:
-
-        lines.append(
-            f"- Average Shares: "
-            f"{average_shares:,}"
-        )
-
-
-    # --------------------------------------------------------
-    # CONTENT RECORDS
-    # --------------------------------------------------------
-
-    lines.append("")
-
-    lines.append(
-        "Verified Content Records:"
-    )
-
-
-    for record in records:
-
-        metrics = []
-
-        if record["views"] is not None:
-
-            metrics.append(
-                f"Views={record['views']:,}"
-            )
-
-        if record["likes"] is not None:
-
-            metrics.append(
-                f"Likes={record['likes']:,}"
-            )
-
-        if record["comments"] is not None:
-
-            metrics.append(
-                f"Comments={record['comments']:,}"
-            )
-
-        if record["shares"] is not None:
-
-            metrics.append(
-                f"Shares={record['shares']:,}"
-            )
-
-
-        metric_text = (
-            ", ".join(metrics)
-            if metrics
-            else "No measurable metrics"
-        )
-
-
-        lines.append(
-
-            f"- {record['content_id']} | "
-            f"Platform={record['platform']} | "
-            f"Category={record['category']} | "
-            f"{metric_text} | "
-            f"[Source {record['source']}]"
-
-        )
-
 
     return "\n".join(
         lines
@@ -694,291 +758,163 @@ def build_verified_analytics(
 PROMPT_TEMPLATE = """
 You are MarketPulse AI, an expert Senior Marketing Intelligence Analyst.
 
-Your job is to transform verified marketing data into clear,
-accurate, actionable business intelligence.
+Your job is to transform retrieved social media marketing data
+into clear, professional, decision-oriented business intelligence.
 
-You are an evidence-first marketing intelligence system.
+You are working inside a RAG system.
+
+IMPORTANT:
+
+Python has already performed all numerical calculations,
+engagement scoring, rankings, platform summaries,
+category summaries, and metric leader calculations.
+
+You MUST trust the VERIFIED PYTHON ANALYTICS section.
+
+You MUST NOT:
+- Recalculate engagement scores.
+- Re-rank content.
+- Change the top-performing content.
+- Invent missing metrics.
+- Treat views as engagement.
+- Claim causation without evidence.
+- Use information outside the retrieved context.
+
+You MAY:
+- Interpret the verified patterns.
+- Explain possible reasons.
+- Identify opportunities.
+- Recommend actions.
+- Highlight limitations.
+- Suggest additional validation.
 
 ============================================================
-CRITICAL RULE
+SOURCE RULES
 ============================================================
 
-Python has already calculated the numerical rankings.
-
-DO NOT recalculate or override the verified analytics.
-
-Use the VERIFIED ANALYTICS SUMMARY as the authoritative source
-for numerical rankings.
-
-The verified analytics were calculated programmatically.
-
-You must NOT contradict them.
-
-============================================================
-DATA RULES
-============================================================
-
-1. Use ONLY the retrieved context and verified analytics.
-
-2. Never invent statistics, percentages, rankings, trends,
-   audience characteristics, or business facts.
-
-3. Every factual claim must include source citations.
-
-4. Use citations exactly like:
-
-   [Source 1]
-
-   [Source 2]
-
-5. If multiple sources support a claim, cite all relevant sources.
-
-6. Never cite a source that does not support the claim.
-
-7. If evidence is insufficient, explicitly say so.
-
-8. Do not claim causation from correlation.
-
-9. Distinguish clearly between:
-
-   - Observed Fact
-   - Observed Pattern
-   - Possible Interpretation
+1. Use ONLY retrieved sources and verified Python analytics.
+2. Never invent statistics, percentages, trends, or facts.
+3. Every factual claim must include a source citation.
+4. Use citations exactly like [Source 1], [Source 2].
+5. When discussing the Python-calculated ranking,
+   cite the source attached to the relevant content.
+6. Clearly distinguish:
+   - Verified fact
+   - Observed pattern
+   - Possible interpretation
    - Recommendation
+7. Never claim that correlation proves causation.
+8. If the evidence is insufficient, say so clearly.
+9. Do not pretend that a small retrieved sample represents
+   the entire dataset.
+10. Do not introduce external marketing knowledge as if it
+    came from the retrieved data.
 
 ============================================================
-ENGAGEMENT RULES
+ENGAGEMENT SCORE DEFINITION
 ============================================================
 
-Do NOT automatically equate Views with Engagement.
+Engagement Score is defined by Python as:
 
-Views represent reach or exposure.
+Likes + Comments + Shares
 
-Likes, Comments, and Shares are engagement signals.
+Views are NOT included in Engagement Score.
 
-When the user asks:
-
-"Which content performs best based on engagement?"
-
-Analyze the engagement signals separately.
-
-Use:
-
-- Highest Likes
-- Highest Comments
-- Highest Shares
-
-Do NOT invent a combined engagement score.
-
-If one content item leads multiple engagement metrics,
-you may describe it as the strongest engagement leader
-for the retrieved sample.
-
-If different content items lead different metrics,
-clearly explain the difference.
+Views represent exposure/reach and should be discussed
+separately from direct engagement.
 
 ============================================================
-REACH VS ENGAGEMENT
+REQUIRED RESPONSE STRUCTURE
 ============================================================
-
-Always distinguish:
-
-Reach Leader:
-Content with the highest Views.
-
-Engagement Leader:
-Content that leads the available interaction metrics.
-
-Example:
-
-"content_31417 has the highest Views, while content_29243 leads
-the available Likes, Comments, and Shares metrics."
-
-This distinction is important.
-
-============================================================
-PLATFORM RULES
-============================================================
-
-Only compare platforms when comparable evidence exists.
-
-Do not claim one platform is better overall unless the retrieved
-evidence supports a fair comparison.
-
-============================================================
-CATEGORY RULES
-============================================================
-
-Do not claim that an entire category performs better based on
-one or two content items.
-
-Use conservative language:
-
-"The retrieved sample suggests..."
-
-"The available evidence indicates..."
-
-"The observed pattern may suggest..."
-
-============================================================
-RECOMMENDATION RULES
-============================================================
-
-Recommendations must be logically connected to the evidence.
-
-Prefer recommendations such as:
-
-- validate the observed pattern with more data
-- analyze high-performing content
-- compare engagement metrics
-- test similar content formats
-- monitor future performance
-- build a data-backed content calendar
-
-Do not recommend paid campaigns, influencer partnerships,
-or budget increases unless the evidence supports them.
-
-============================================================
-DECISION SIGNAL
-============================================================
-
-Choose exactly one:
-
-HIGH SIGNAL
-
-MODERATE SIGNAL
-
-LOW SIGNAL
-
-Use HIGH SIGNAL only when the evidence is strong and consistent.
-
-Use MODERATE SIGNAL when the evidence suggests a pattern
-but more validation is needed.
-
-Use LOW SIGNAL when evidence is limited, mixed, or insufficient.
-
-============================================================
-RESPONSE STRUCTURE
-============================================================
-
-Return ONLY the following structured analysis.
 
 ### 🎯 Key Insight
 
-Give the most important answer to the user's question.
+State the single most important verified finding
+that directly answers the user's question.
 
-If the question is about engagement, clearly identify the
-engagement leader based on the verified Likes, Comments,
-and Shares metrics.
+If the question asks which content performs best based
+on engagement, use the Python-ranked top content.
 
-If Views tell a different story, mention the Reach Leader separately.
-
-Every factual claim must include a citation.
-
----
+Do not choose a different winner.
 
 ### 📊 Supporting Evidence
 
-List the strongest verified evidence.
+List the strongest factual evidence.
 
-Use concise bullet points.
+Every factual bullet must include a source citation.
 
-Every factual bullet must include a citation.
-
-Do not change any numerical value from the verified analytics.
-
----
+Use the verified Python analytics when discussing rankings
+and calculated engagement scores.
 
 ### 🔥 Engagement Drivers
 
-Use:
+Separate the answer into:
 
 **Observed Pattern**
 
-Describe what the data actually shows.
+Describe only patterns directly supported by the data.
 
 **Possible Interpretation**
 
-Explain what the pattern MAY indicate.
-
-Do not present interpretations as proven facts.
-
----
+Explain plausible interpretations,
+but clearly label them as interpretations,
+not proven causal facts.
 
 ### 💡 Content Opportunities
 
-Suggest 2 to 4 evidence-based opportunities.
+Suggest practical opportunities based on
+the observed evidence.
 
-Clearly distinguish opportunities from proven facts.
-
----
+Clearly distinguish opportunities
+from proven facts.
 
 ### 🚀 Recommended Actions
 
-Provide 3 to 5 practical actions.
+Provide 3 to 5 specific actions.
 
-Prioritize validation, analysis, testing, and monitoring.
-
----
+Actions should be:
+- Practical
+- Specific
+- Derived from the evidence
+- Suitable for a marketer
 
 ### 📌 Decision Signal
 
-Choose exactly one:
+Choose one:
 
-HIGH SIGNAL
+**STRONG SIGNAL**
+Use only when the retrieved evidence is consistent
+and sufficiently large.
 
-MODERATE SIGNAL
+**MODERATE SIGNAL**
+Use when the evidence suggests a meaningful pattern
+but additional validation is needed.
 
-LOW SIGNAL
+**WEAK SIGNAL**
+Use when evidence is limited or inconsistent.
 
-Then explain the signal in one concise sentence.
-
----
+Briefly explain why.
 
 ### 🎯 Recommended Next Step
 
-Provide exactly ONE specific next action.
+Give ONE highest-priority next step.
 
----
+It must directly follow from the evidence.
 
 ### ⚠️ Data Limitations
 
-Mention the most relevant limitations.
+Mention limitations such as:
+- Small retrieved sample
+- Missing metrics
+- Missing audience data
+- Missing platform coverage
+- Missing category coverage
+- Lack of causal evidence
 
-Consider:
-
-- sample size
-- missing metrics
-- missing audience data
-- missing platform comparisons
-- missing causal evidence
-
-============================================================
-FINAL QUALITY CHECK
-============================================================
-
-Before returning the answer verify:
-
-1. Numerical rankings match the VERIFIED ANALYTICS SUMMARY.
-
-2. The highest Views content is correctly identified.
-
-3. The highest Likes content is correctly identified.
-
-4. The highest Comments content is correctly identified.
-
-5. The highest Shares content is correctly identified.
-
-6. Views are not incorrectly treated as engagement.
-
-7. No unsupported causal claims are made.
-
-8. Every factual claim has a source citation.
-
-9. Exactly ONE Recommended Next Step is provided.
+Only mention limitations that actually apply.
 
 ============================================================
-VERIFIED ANALYTICS
+VERIFIED PYTHON ANALYTICS
 ============================================================
 
 {analytics}
@@ -1018,6 +954,9 @@ def get_llm(
     api_key: str = None,
     model: str = DEFAULT_MODEL,
 ) -> ChatGroq:
+    """
+    Initialize Groq LLM.
+    """
 
     api_key = (
         api_key
@@ -1049,10 +988,25 @@ def generate_answer(
     llm,
     k: int = 5,
 ) -> dict:
+    """
+    Main MarketPulse AI pipeline.
 
-    # --------------------------------------------------------
-    # VALIDATE QUERY
-    # --------------------------------------------------------
+    Flow:
+
+    User Query
+        ↓
+    Retrieve Documents
+        ↓
+    Parse Metrics
+        ↓
+    Python Analytics
+        ↓
+    Verified Analytics Summary
+        ↓
+    LLM Interpretation
+        ↓
+    Structured Answer
+    """
 
     if not query or not query.strip():
 
@@ -1061,12 +1015,10 @@ def generate_answer(
                 "Please enter a marketing question."
             ),
             "sources": [],
-            "analytics": "",
         }
 
-
     # --------------------------------------------------------
-    # RETRIEVE DOCUMENTS
+    # STEP 1: RETRIEVE
     # --------------------------------------------------------
 
     docs = retrieve_context(
@@ -1075,44 +1027,32 @@ def generate_answer(
         k=k,
     )
 
+    # --------------------------------------------------------
+    # STEP 2: ANALYZE WITH PYTHON
+    # --------------------------------------------------------
+
+    analyzed_docs = analyze_documents(
+        docs
+    )
 
     # --------------------------------------------------------
-    # EMPTY RETRIEVAL
+    # STEP 3: BUILD VERIFIED ANALYTICS
     # --------------------------------------------------------
 
-    if not docs:
-
-        return {
-            "answer": (
-                "I could not find enough relevant evidence "
-                "in the marketing knowledge base to answer "
-                "this question reliably."
-            ),
-            "sources": [],
-            "analytics": "",
-        }
-
+    analytics = build_analytics_summary(
+        analyzed_docs
+    )
 
     # --------------------------------------------------------
-    # FORMAT RAW CONTEXT
+    # STEP 4: FORMAT ORIGINAL CONTEXT
     # --------------------------------------------------------
 
     context = format_context(
         docs
     )
 
-
     # --------------------------------------------------------
-    # CALCULATE VERIFIED ANALYTICS
-    # --------------------------------------------------------
-
-    analytics = build_verified_analytics(
-        docs
-    )
-
-
-    # --------------------------------------------------------
-    # BUILD RAG + ANALYTICS CHAIN
+    # STEP 5: BUILD LLM CHAIN
     # --------------------------------------------------------
 
     chain = (
@@ -1126,24 +1066,22 @@ def generate_answer(
         | StrOutputParser()
     )
 
-
     # --------------------------------------------------------
-    # GENERATE ANSWER
+    # STEP 6: GENERATE INTERPRETATION
     # --------------------------------------------------------
 
     answer = chain.invoke(
         query
     )
 
-
     # --------------------------------------------------------
-    # RETURN RESULT
+    # STEP 7: RETURN RESULT
     # --------------------------------------------------------
 
     return {
         "answer": answer,
         "sources": docs,
-        "analytics": analytics,
+        "analytics": analyzed_docs,
     }
 
 
@@ -1158,71 +1096,71 @@ if __name__ == "__main__":
     llm = get_llm()
 
     query = (
-        "Which content performs best based on engagement?"
+        "Which content performs best "
+        "based on engagement?"
     )
 
     result = generate_answer(
         query,
         vectorstore,
         llm,
-        k=5,
-    )
-
-
-    print(
-        "=" * 70
     )
 
     print(
-        "MARKETPULSE AI"
+        f"Query: {query}\n"
     )
 
     print(
-        "=" * 70
+        "========================================"
     )
 
-
     print(
-        f"\nQuery:\n{query}"
-    )
-
-
-    print(
-        "\n"
         "VERIFIED ANALYTICS"
     )
 
     print(
-        "-" * 70
+        "========================================"
     )
 
     print(
-        result.get(
-            "analytics",
-            ""
+        build_analytics_summary(
+            result.get(
+                "analytics",
+                [],
+            )
         )
     )
 
-
     print(
-        "\n"
-        "AI ANALYSIS"
+        "\n========================================"
     )
 
     print(
-        "-" * 70
+        "AI ANSWER"
     )
 
     print(
-        result.get(
-            "answer",
-            ""
+        "========================================"
+    )
+
+    print(
+        result["answer"]
+    )
+
+    print(
+        "\n========================================"
+    )
+
+    print(
+        "SOURCES USED"
+    )
+
+    print(
+        "========================================"
+    )
+
+    print(
+        len(
+            result["sources"]
         )
-    )
-
-
-    print(
-        "\n"
-        "Sources used: "
-        f"{len(result.get('sources', []))}"
     )
