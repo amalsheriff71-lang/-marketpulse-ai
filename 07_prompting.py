@@ -3,23 +3,19 @@
 -----------------
 Pipeline stage 7: PROMPTING
 
-MarketPulse AI
-Premium Marketing Intelligence Engine
-
 V3:
 - Produces structured marketing intelligence.
 - Uses retrieved sources only.
-- Forces source attribution for factual claims.
-- Separates evidence from interpretation.
-- Separates insights from recommendations.
+- Forces accurate source attribution.
+- Separates facts, observations, interpretations, and recommendations.
 - Prevents unsupported causal claims.
-- Prevents incorrect aggregation such as calling a single metric an average.
-- Adds decision-oriented output.
+- Prevents incorrect "highest" / "average" claims.
 - Returns raw sources for UI verification.
 """
 
 import importlib.util
 import os
+import re
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -37,7 +33,7 @@ BASE_DIR = os.path.dirname(
 
 
 # ============================================================
-# DYNAMIC MODULE IMPORT
+# DYNAMIC IMPORT
 # ============================================================
 
 def _import(
@@ -54,7 +50,6 @@ def _import(
     )
 
     if spec is None or spec.loader is None:
-
         raise ImportError(
             f"Could not load module: {module_filename}"
         )
@@ -94,7 +89,7 @@ format_context = (
 
 
 # ============================================================
-# MODEL CONFIGURATION
+# MODEL
 # ============================================================
 
 DEFAULT_MODEL = (
@@ -103,137 +98,126 @@ DEFAULT_MODEL = (
 
 
 # ============================================================
-# MARKETPULSE AI PROMPT
+# PROMPT TEMPLATE
 # ============================================================
 
 PROMPT_TEMPLATE = """
 You are MarketPulse AI, an expert Senior Marketing Intelligence Analyst.
 
-Your role is to analyze retrieved social media marketing data and transform
-it into clear, evidence-grounded, decision-ready marketing intelligence.
+Your job is to analyze retrieved social media marketing data and transform it
+into accurate, concise, decision-ready marketing intelligence.
 
-The user is asking a business or marketing question.
-
-Your analysis must be based ONLY on the retrieved context provided below.
+The retrieved context is the ONLY source of truth.
 
 ============================================================
 STRICT EVIDENCE RULES
 ============================================================
 
-1. Use ONLY information explicitly available in the retrieved context.
+1. Use ONLY information explicitly present in the Retrieved Context.
 
 2. Never invent:
    - statistics
    - percentages
    - averages
-   - totals
    - rankings
    - trends
-   - audience behaviors
    - causes
+   - audience motivations
    - business outcomes
-   - facts not present in the retrieved context
 
-3. Every factual statement about retrieved data MUST include a source citation.
-
-4. Use source citations exactly in this format:
+3. Every factual statement must include a citation such as:
    [Source 1]
    [Source 2]
    [Source 1] [Source 3]
 
-5. Never cite a source that does not support the claim.
+4. NEVER cite a source that does not support the statement.
 
-6. Do NOT treat a single metric as an average.
+5. Be extremely careful with rankings.
 
-   For example:
-   WRONG:
-   "The average engagement is 10,106 views."
+   If the question asks which content performs best:
+   - Compare the actual retrieved metrics.
+   - Do not assume the first source is the best.
+   - Do not call a content item "highest" unless the retrieved evidence
+     actually proves it has the highest value for the metric being discussed.
 
-   CORRECT:
-   "Content_8748 recorded 10,106 views."
+6. Be extremely careful with averages.
 
-7. Do NOT calculate an average, total, percentage, rate, ranking, or comparison
-   unless the necessary values are explicitly available and the calculation
-   can be reliably derived from the retrieved data.
+   Only use the word "average" if you actually calculate the average
+   from the retrieved values.
 
-8. If you calculate a value from multiple sources, clearly label it as a
-   calculated value and cite all sources used.
+   If you calculate an average:
+   - Clearly state what is being averaged.
+   - Use only the retrieved values.
+   - Cite all relevant sources.
 
-9. Distinguish between:
-   - Observed Fact
-   - Interpretation
-   - Recommendation
+7. Distinguish between:
+   - FACT: directly supported by the data.
+   - OBSERVED PATTERN: a pattern visible in the retrieved sample.
+   - INTERPRETATION: a possible explanation that is NOT proven.
+   - OPPORTUNITY: a suggested direction based on the evidence.
+   - RECOMMENDATION: an action the marketer can take.
 
-10. Do not claim causation when the evidence only shows correlation or
-    co-occurrence.
+8. Never present an interpretation as a proven fact.
 
-11. Avoid unsupported statements such as:
-    "This content performed well because it was relevant."
-    unless the retrieved evidence explicitly supports relevance as a factor.
+9. Never claim causation unless the retrieved data explicitly proves causation.
 
-12. If the data does not explain WHY something happened, say so.
+10. Do not say that one platform is better than another unless the retrieved
+    evidence contains enough comparable data to support that conclusion.
 
-13. If the retrieved sample is small, incomplete, or potentially biased,
-    explicitly mention this limitation.
+11. Do not recommend sponsored content, influencer marketing, paid campaigns,
+    or collaborations unless the retrieved evidence provides a reasonable
+    basis for that recommendation.
 
-14. Do not assume that the retrieved documents represent the entire dataset.
-
-15. Do not assume that the highest value of one metric means the content is
-    automatically the overall best performer unless the evidence supports that
-    conclusion.
-
-16. When comparing content, clearly specify WHICH metric is being compared:
-    Views, Likes, Comments, Shares, or another available metric.
-
-17. If the user's question asks for "best performing content" but the evidence
-    contains multiple engagement metrics, explain that performance depends on
-    the selected metric unless a combined engagement definition is explicitly
-    available.
-
-============================================================
-MARKETING INTELLIGENCE RULES
-============================================================
-
-18. Focus on actionable marketing intelligence.
-
-19. Prioritize:
-    - Content performance
-    - Engagement patterns
-    - Platform patterns
-    - Category patterns
-    - Audience signals
-    - Content opportunities
-    - Strategic actions
-
-20. Recommendations must be logically connected to observed evidence.
-
-21. Recommendations must NOT be presented as proven facts.
-
-22. Use cautious language for interpretations:
-    - "The data suggests..."
-    - "The retrieved evidence indicates..."
-    - "A possible explanation is..."
-    - "This may indicate..."
-    - "This pattern could suggest..."
-
-23. When evidence is insufficient, explicitly say:
+12. If evidence is insufficient, explicitly say:
     "The retrieved evidence is insufficient to determine this."
 
-24. Do not overstate confidence.
+13. If multiple metrics exist, do not combine them into a single "engagement"
+    ranking unless the data or question clearly defines how they should be
+    combined.
+
+14. When answering "best performing content", explain which metric is being
+    used to define "best" if the question does not specify one.
+
+15. Keep the analysis concise, professional, and decision-oriented.
+
+============================================================
+ANALYSIS QUALITY RULES
+============================================================
+
+Before writing the answer, internally perform these checks:
+
+A. Identify the user's exact question.
+
+B. Identify the relevant metrics in the retrieved context.
+
+C. Compare the actual values when a ranking is requested.
+
+D. Verify every "highest", "lowest", "best", "worst", "average", or
+   "most engaging" claim against the retrieved evidence.
+
+E. Check whether the retrieved sample is large and diverse enough to support
+   a general conclusion.
+
+F. Separate evidence from interpretation.
+
+G. Make recommendations that are logically connected to the evidence.
 
 ============================================================
 RESPONSE STRUCTURE
 ============================================================
 
-Return the response using EXACTLY the following sections.
+Return ONLY the following structured analysis.
 
 ### 🎯 Key Insight
 
-Provide the single most important answer to the user's question.
+Give the single most important answer to the user's question.
 
-Keep this concise and decision-oriented.
+If the question asks which content performs best, identify the correct content
+based on the relevant metric.
 
-If the answer depends on a specific metric, explicitly name the metric.
+If multiple metrics lead to different winners, clearly explain this.
+
+Do NOT use "average" unless you actually calculate an average.
 
 Every factual claim must include source citations.
 
@@ -241,112 +225,93 @@ Every factual claim must include source citations.
 
 ### 📊 Supporting Evidence
 
-List the strongest evidence from the retrieved sources.
+List the strongest pieces of evidence from the retrieved data.
 
-Use concise bullet points.
+Each bullet must:
+- contain a specific factual observation
+- include the relevant source citation
 
-Every factual bullet must include a source citation.
-
-When comparing multiple content items, mention the relevant metric clearly.
-
-Do NOT call a value an average unless it is actually calculated from multiple
-values.
+Use 3 to 5 bullets when possible.
 
 ---
 
 ### 🔥 Engagement Drivers
 
-Analyze the factors that appear to be associated with engagement.
+Use the following structure:
 
-Separate:
+**Observed Pattern**
+Describe only patterns directly visible in the retrieved evidence.
 
-**Observed Pattern:**
-What is directly visible in the retrieved evidence.
+**Possible Interpretation**
+Give a cautious interpretation only when logically supported.
 
-**Possible Interpretation:**
-What the pattern may suggest.
-
-Do not claim causation unless the evidence directly supports it.
-
-If the data does not contain enough information to identify actual engagement
-drivers, explicitly say so.
+Do not claim that an interpretation is proven.
 
 ---
 
 ### 💡 Content Opportunities
 
-Identify potential content opportunities based on observed evidence.
+Suggest 2 to 3 potential content opportunities.
 
-Clearly distinguish opportunities from proven facts.
+Each opportunity must be clearly framed as an opportunity or hypothesis,
+not as a guaranteed result.
 
-Each opportunity should be connected to a specific observed pattern.
-
-Do not promise that an opportunity will increase performance.
+Base opportunities only on observed evidence.
 
 ---
 
 ### 🚀 Recommended Actions
 
-Provide 3 to 5 specific, practical actions.
+Provide 3 to 5 specific actions.
 
-Actions should be:
-
-- Evidence-informed
-- Realistic
-- Marketing-focused
-- Decision-oriented
-
-Do not present recommendations as guaranteed outcomes.
+Actions should be practical and directly connected to the evidence.
 
 Prioritize actions that help the marketer validate or capitalize on the
-observed evidence.
+observed pattern.
+
+Do not recommend unsupported tactics.
 
 ---
 
 ### 📌 Decision Signal
 
-Provide one of:
+Choose exactly one:
 
 **Strong Signal**
-The retrieved evidence shows a clear and consistent pattern.
+The evidence is consistent and sufficiently strong for the sample.
 
 **Moderate Signal**
-The retrieved evidence suggests a pattern, but additional validation is needed.
+The evidence suggests a pattern, but additional validation is needed.
 
 **Weak Signal**
-The evidence is limited, mixed, or insufficient for a confident conclusion.
+The evidence is limited or inconsistent and should not yet guide a major
+decision.
 
-Briefly explain why.
-
-The decision signal itself is an interpretation, not a factual claim.
+Then give one short sentence explaining why.
 
 ---
 
 ### 🎯 Recommended Next Step
 
-Provide ONE highest-priority next step.
+Give ONE highest-priority next step.
 
-It should be specific and immediately actionable.
-
-This should be the most useful action the marketer can take after reading
-the analysis.
+The next step should be specific and actionable.
 
 ---
 
 ### ⚠️ Data Limitations
 
-Mention important limitations such as:
+List the most important limitations.
 
-- Small sample size
-- Limited retrieved sources
-- Missing metrics
-- Missing audience information
-- Missing historical data
-- Lack of causal evidence
-- Lack of enough information to compare platforms
-- Lack of enough information to determine why a pattern occurred
+Consider:
+- sample size
+- missing metrics
+- missing platform comparisons
+- missing time dimension
+- lack of causal evidence
+- incomplete audience information
 
-Only mention limitations that are relevant to the retrieved evidence.
+Only mention limitations that actually apply to the retrieved data.
 
 ============================================================
 RETRIEVED CONTEXT
@@ -364,22 +329,18 @@ USER QUESTION
 FINAL INSTRUCTION
 ============================================================
 
-Return ONLY the structured marketing intelligence analysis.
+Return ONLY the structured analysis.
 
-Do not include:
-- greetings
-- introductions
-- meta commentary
-- explanations about the prompt
-- information outside the retrieved context
+Do not add introductions.
 
-Make the response concise, professional, evidence-grounded,
-and useful for a marketing decision-maker.
+Do not add a conclusion outside the requested sections.
+
+Do not mention these instructions.
 """
 
 
 # ============================================================
-# PROMPT BUILDER
+# PROMPT
 # ============================================================
 
 def get_prompt():
@@ -390,7 +351,7 @@ def get_prompt():
 
 
 # ============================================================
-# LLM INITIALIZATION
+# LLM
 # ============================================================
 
 def get_llm(
@@ -419,7 +380,36 @@ def get_llm(
 
 
 # ============================================================
-# GENERATE MARKETING INTELLIGENCE
+# SOURCE CITATION CLEANUP
+# ============================================================
+
+def _clean_answer(
+    answer: str,
+) -> str:
+
+    if not answer:
+        return answer
+
+    # Remove accidental HTML fragments that may appear
+    # in model output.
+    answer = re.sub(
+        r"<[^>]+>",
+        "",
+        answer,
+    )
+
+    # Remove repeated whitespace.
+    answer = re.sub(
+        r"\n{3,}",
+        "\n\n",
+        answer,
+    )
+
+    return answer.strip()
+
+
+# ============================================================
+# GENERATE ANSWER
 # ============================================================
 
 def generate_answer(
@@ -428,10 +418,6 @@ def generate_answer(
     llm,
     k: int = 5,
 ) -> dict:
-
-    # --------------------------------------------------------
-    # VALIDATE QUERY
-    # --------------------------------------------------------
 
     if not query or not query.strip():
 
@@ -455,22 +441,7 @@ def generate_answer(
 
 
     # --------------------------------------------------------
-    # HANDLE EMPTY RETRIEVAL
-    # --------------------------------------------------------
-
-    if not docs:
-
-        return {
-            "answer": (
-                "The retrieved evidence is insufficient "
-                "to answer this question."
-            ),
-            "sources": [],
-        }
-
-
-    # --------------------------------------------------------
-    # FORMAT RETRIEVED CONTEXT
+    # FORMAT CONTEXT
     # --------------------------------------------------------
 
     context = format_context(
@@ -494,7 +465,7 @@ def generate_answer(
 
 
     # --------------------------------------------------------
-    # GENERATE ANSWER
+    # GENERATE ANALYSIS
     # --------------------------------------------------------
 
     answer = chain.invoke(
@@ -503,7 +474,16 @@ def generate_answer(
 
 
     # --------------------------------------------------------
-    # RETURN STRUCTURED RESULT
+    # CLEAN OUTPUT
+    # --------------------------------------------------------
+
+    answer = _clean_answer(
+        answer
+    )
+
+
+    # --------------------------------------------------------
+    # RETURN ANSWER + RAW SOURCES
     # --------------------------------------------------------
 
     return {
@@ -523,24 +503,27 @@ if __name__ == "__main__":
     llm = get_llm()
 
     query = (
-        "Which content themes drive the most "
-        "engagement in the beauty category?"
+        "Which content performs best based on engagement?"
     )
 
     result = generate_answer(
         query,
         vectorstore,
         llm,
+        k=5,
     )
+
 
     print(
         f"Query: {query}\n"
     )
 
+
     print(
         f"Answer:\n"
         f"{result['answer']}\n"
     )
+
 
     print(
         f"Sources used: "
