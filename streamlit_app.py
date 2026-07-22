@@ -7,7 +7,9 @@ Premium AI-powered Marketing Intelligence Dashboard
 
 import os
 import importlib.util
+
 import streamlit as st
+from huggingface_hub import snapshot_download
 
 
 # ============================================================
@@ -32,33 +34,62 @@ BASE_DIR = os.path.dirname(
 
 
 # ============================================================
+# HUGGING FACE CHROMA CONFIG
+# ============================================================
+
+HF_REPO_ID = (
+    "amal-sherif71/marketpulse-chroma"
+)
+
+HF_CHROMA_SUBFOLDER = (
+    "chroma_store"
+)
+
+
+# ============================================================
 # DYNAMIC IMPORT
 # ============================================================
 
-def load_module(filename, module_name):
+def load_module(
+    filename,
+    module_name,
+):
 
     path = os.path.join(
         BASE_DIR,
         filename,
     )
 
-    if not os.path.exists(path):
+    if not os.path.exists(
+        path
+    ):
+
         raise FileNotFoundError(
             f"File not found: {filename}"
         )
 
-    spec = importlib.util.spec_from_file_location(
-        module_name,
-        path,
+    spec = (
+        importlib.util
+        .spec_from_file_location(
+            module_name,
+            path,
+        )
     )
 
-    if spec is None or spec.loader is None:
+    if (
+        spec is None
+        or spec.loader is None
+    ):
+
         raise ImportError(
             f"Could not load {filename}"
         )
 
-    module = importlib.util.module_from_spec(
-        spec
+    module = (
+        importlib.util
+        .module_from_spec(
+            spec
+        )
     )
 
     spec.loader.exec_module(
@@ -99,7 +130,9 @@ except Exception as e:
 # PROJECT FUNCTIONS
 # ============================================================
 
-store_exists = store_module.store_exists
+store_exists = (
+    store_module.store_exists
+)
 
 PERSIST_DIRECTORY = (
     store_module.PERSIST_DIRECTORY
@@ -126,12 +159,7 @@ st.markdown(
     """
     <style>
 
-    /* ========================================================
-       GLOBAL
-    ======================================================== */
-
     .stApp {
-
         background:
             radial-gradient(
                 circle at 8% 0%,
@@ -154,36 +182,19 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       DEFAULT STREAMLIT HEADER
-    ======================================================== */
-
     header[data-testid="stHeader"] {
-
         background: transparent;
     }
 
 
-    /* ========================================================
-       MAIN CONTENT
-    ======================================================== */
-
     .main .block-container {
-
         max-width: 1500px;
-
         padding-top: 2rem;
-
         padding-bottom: 4rem;
     }
 
 
-    /* ========================================================
-       SIDEBAR
-    ======================================================== */
-
     section[data-testid="stSidebar"] {
-
         background:
             linear-gradient(
                 180deg,
@@ -200,43 +211,30 @@ st.markdown(
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 {
-
         color: #f8fafc;
     }
 
 
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] li {
-
         color: #94a3b8;
     }
 
-
-    /* ========================================================
-       TYPOGRAPHY
-    ======================================================== */
 
     h1,
     h2,
     h3,
     h4 {
-
         letter-spacing: -0.025em;
     }
 
 
     h1 {
-
         font-weight: 800 !important;
     }
 
 
-    /* ========================================================
-       HERO
-    ======================================================== */
-
     .hero-container {
-
         padding: 3.2rem 3rem;
 
         border-radius: 28px;
@@ -261,7 +259,6 @@ st.markdown(
 
 
     .hero-badge-native {
-
         display: inline-block;
 
         padding:
@@ -295,7 +292,6 @@ st.markdown(
 
 
     .hero-title-native {
-
         font-size:
             clamp(2rem, 4vw, 3.4rem);
 
@@ -314,7 +310,6 @@ st.markdown(
 
 
     .hero-highlight {
-
         background:
             linear-gradient(
                 90deg,
@@ -331,7 +326,6 @@ st.markdown(
 
 
     .hero-subtitle-native {
-
         font-size:
             1.05rem;
 
@@ -346,12 +340,7 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       KPI CARDS
-    ======================================================== */
-
     .kpi-card-native {
-
         padding:
             1.35rem;
 
@@ -384,10 +373,11 @@ st.markdown(
 
 
     .kpi-card-native:hover {
+        transform:
+            translateY(-4px);
 
-        transform: translateY(-4px);
-
-        border-color: rgba(129,140,248,0.45);
+        border-color:
+            rgba(129,140,248,0.45);
 
         box-shadow:
             0 20px 50px
@@ -396,7 +386,6 @@ st.markdown(
 
 
     .kpi-icon-native {
-
         font-size:
             1.5rem;
 
@@ -406,7 +395,6 @@ st.markdown(
 
 
     .kpi-title-native {
-
         color:
             #94a3b8;
 
@@ -425,7 +413,6 @@ st.markdown(
 
 
     .kpi-text-native {
-
         color:
             #f8fafc;
 
@@ -440,12 +427,7 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       SECTION LABEL
-    ======================================================== */
-
     .section-eyebrow-native {
-
         color:
             #818cf8;
 
@@ -469,12 +451,7 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       EXPLORE CARDS
-    ======================================================== */
-
     .explore-card-native {
-
         min-height:
             195px;
 
@@ -507,10 +484,11 @@ st.markdown(
 
 
     .explore-card-native:hover {
+        transform:
+            translateY(-4px);
 
-        transform: translateY(-4px);
-
-        border-color: rgba(168,85,247,0.45);
+        border-color:
+            rgba(168,85,247,0.45);
 
         box-shadow:
             0 20px 50px
@@ -519,7 +497,6 @@ st.markdown(
 
 
     .explore-icon-native {
-
         font-size:
             2rem;
 
@@ -529,7 +506,6 @@ st.markdown(
 
 
     .explore-title-native {
-
         color:
             #f8fafc;
 
@@ -545,7 +521,6 @@ st.markdown(
 
 
     .explore-description-native {
-
         color:
             #94a3b8;
 
@@ -557,12 +532,7 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       BUTTONS
-    ======================================================== */
-
     .stButton > button {
-
         min-height:
             44px;
 
@@ -588,7 +558,6 @@ st.markdown(
 
 
     .stButton > button:hover {
-
         transform:
             translateY(-2px);
 
@@ -601,7 +570,6 @@ st.markdown(
 
 
     button[kind="primary"] {
-
         background:
             linear-gradient(
                 135deg,
@@ -622,7 +590,6 @@ st.markdown(
 
 
     button[kind="primary"]:hover {
-
         background:
             linear-gradient(
                 135deg,
@@ -636,12 +603,7 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       TEXT AREA
-    ======================================================== */
-
     textarea {
-
         border-radius:
             18px !important;
 
@@ -658,7 +620,6 @@ st.markdown(
 
 
     textarea:focus {
-
         border:
             1px solid
             rgba(129,140,248,0.7) !important;
@@ -669,12 +630,7 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       RESULTS
-    ======================================================== */
-
     .result-header-native {
-
         padding:
             1.5rem 1.7rem;
 
@@ -698,7 +654,6 @@ st.markdown(
 
 
     div[data-testid="stVerticalBlockBorderWrapper"] {
-
         padding:
             0.4rem;
 
@@ -719,7 +674,6 @@ st.markdown(
 
 
     .insight-label-native {
-
         color:
             #a5b4fc;
 
@@ -741,7 +695,6 @@ st.markdown(
 
 
     .action-card-native {
-
         padding:
             1.25rem;
 
@@ -760,12 +713,7 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       EMPTY STATE
-    ======================================================== */
-
     .empty-state-native {
-
         padding:
             3rem;
 
@@ -788,7 +736,6 @@ st.markdown(
 
 
     .empty-icon-native {
-
         font-size:
             3rem;
 
@@ -798,7 +745,6 @@ st.markdown(
 
 
     .empty-title-native {
-
         font-size:
             1.2rem;
 
@@ -811,7 +757,6 @@ st.markdown(
 
 
     .empty-description-native {
-
         color:
             #94a3b8;
 
@@ -823,12 +768,7 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       FOOTER
-    ======================================================== */
-
     .footer-native {
-
         text-align:
             center;
 
@@ -850,27 +790,20 @@ st.markdown(
     }
 
 
-    /* ========================================================
-       MOBILE
-    ======================================================== */
-
     @media (max-width: 768px) {
 
         .hero-container {
-
             padding:
                 2rem
                 1.4rem;
         }
 
         .hero-title-native {
-
             font-size:
                 2rem;
         }
 
         .kpi-card-native {
-
             min-height:
                 110px;
         }
@@ -906,9 +839,13 @@ if "auto_analyze" not in st.session_state:
 
 try:
 
-    groq_api_key = st.secrets["GROQ_API_KEY"]
+    groq_api_key = st.secrets[
+        "GROQ_API_KEY"
+    ]
 
-    os.environ["GROQ_API_KEY"] = groq_api_key
+    os.environ[
+        "GROQ_API_KEY"
+    ] = groq_api_key
 
 except Exception:
 
@@ -987,19 +924,29 @@ with st.sidebar:
 # ============================================================
 
 st.markdown(
-    """<div class="hero-container">
-<div class="hero-badge-native">✨ AI-POWERED MARKETING INTELLIGENCE</div>
-<div class="hero-title-native">
-Turn Social Media Data<br>
-<span class="hero-highlight">Into Your Next Marketing Move.</span>
-</div>
-<div class="hero-subtitle-native">
-MarketPulse AI transforms your marketing knowledge base
-into actionable intelligence. Discover what drives engagement,
-understand audience behavior, identify content opportunities,
-and make smarter decisions — grounded in your own data.
-</div>
-</div>""",
+    """
+    <div class="hero-container">
+
+    <div class="hero-badge-native">
+    ✨ AI-POWERED MARKETING INTELLIGENCE
+    </div>
+
+    <div class="hero-title-native">
+    Turn Social Media Data<br>
+    <span class="hero-highlight">
+    Into Your Next Marketing Move.
+    </span>
+    </div>
+
+    <div class="hero-subtitle-native">
+    MarketPulse AI transforms your marketing knowledge base
+    into actionable intelligence. Discover what drives engagement,
+    understand audience behavior, identify content opportunities,
+    and make smarter decisions — grounded in your own data.
+    </div>
+
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
@@ -1047,17 +994,23 @@ for col, item in zip(
     with col:
 
         st.markdown(
-            f"""<div class="kpi-card-native">
-<div class="kpi-icon-native">
-{item[0]}
-</div>
-<div class="kpi-title-native">
-{item[1]}
-</div>
-<div class="kpi-text-native">
-{item[2]}
-</div>
-</div>""",
+            f"""
+            <div class="kpi-card-native">
+
+            <div class="kpi-icon-native">
+            {item[0]}
+            </div>
+
+            <div class="kpi-title-native">
+            {item[1]}
+            </div>
+
+            <div class="kpi-text-native">
+            {item[2]}
+            </div>
+
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
@@ -1142,17 +1095,23 @@ for i, item in enumerate(
     with columns[i]:
 
         st.markdown(
-            f"""<div class="explore-card-native">
-<div class="explore-icon-native">
-{icon}
-</div>
-<div class="explore-title-native">
-{title}
-</div>
-<div class="explore-description-native">
-{description}
-</div>
-</div>""",
+            f"""
+            <div class="explore-card-native">
+
+            <div class="explore-icon-native">
+            {icon}
+            </div>
+
+            <div class="explore-title-native">
+            {title}
+            </div>
+
+            <div class="explore-description-native">
+            {description}
+            </div>
+
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
@@ -1164,13 +1123,19 @@ for i, item in enumerate(
             use_container_width=True,
         ):
 
-            st.session_state.query = question
+            st.session_state.query = (
+                question
+            )
 
             st.session_state.result = None
 
-            st.session_state.analysis_complete = False
+            st.session_state.analysis_complete = (
+                False
+            )
 
-            st.session_state.auto_analyze = True
+            st.session_state.auto_analyze = (
+                True
+            )
 
             st.rerun()
 
@@ -1206,7 +1171,6 @@ query = st.text_area(
 )
 
 
-# Keep latest input synchronized.
 st.session_state.query = query
 
 
@@ -1247,13 +1211,19 @@ for i, question in enumerate(
             use_container_width=True,
         ):
 
-            st.session_state.query = question
+            st.session_state.query = (
+                question
+            )
 
             st.session_state.result = None
 
-            st.session_state.analysis_complete = False
+            st.session_state.analysis_complete = (
+                False
+            )
 
-            st.session_state.auto_analyze = True
+            st.session_state.auto_analyze = (
+                True
+            )
 
             st.rerun()
 
@@ -1272,28 +1242,121 @@ analyze_clicked = st.button(
 
 
 # ============================================================
+# DOWNLOAD CHROMA FROM HUGGING FACE
+# ============================================================
+
+@st.cache_resource(
+    show_spinner=False
+)
+def get_chroma_directory():
+
+    # --------------------------------------------------------
+    # LOCAL
+    # --------------------------------------------------------
+
+    local_chroma = os.path.join(
+        BASE_DIR,
+        "chroma_store",
+    )
+
+    if os.path.isdir(
+        local_chroma
+    ):
+
+        return local_chroma
+
+
+    # --------------------------------------------------------
+    # STREAMLIT CLOUD
+    # --------------------------------------------------------
+
+    try:
+
+        hf_token = st.secrets[
+            "HF_TOKEN"
+        ]
+
+    except Exception:
+
+        raise RuntimeError(
+            "HF_TOKEN is missing from "
+            "Streamlit Secrets."
+        )
+
+
+    with st.spinner(
+        "☁️ Downloading MarketPulse AI knowledge base..."
+    ):
+
+        snapshot_path = (
+            snapshot_download(
+                repo_id=HF_REPO_ID,
+                repo_type="dataset",
+                token=hf_token,
+                allow_patterns=[
+                    "chroma_store/**",
+                ],
+            )
+        )
+
+
+    chroma_directory = os.path.join(
+        snapshot_path,
+        HF_CHROMA_SUBFOLDER,
+    )
+
+
+    if not os.path.isdir(
+        chroma_directory
+    ):
+
+        raise FileNotFoundError(
+            "Downloaded Chroma store was not found."
+        )
+
+
+    return chroma_directory
+
+
+# ============================================================
 # LOAD VECTOR STORE
 # ============================================================
 
 @st.cache_resource(
-    show_spinner="Loading your marketing intelligence engine..."
+    show_spinner=(
+        "Loading your marketing intelligence engine..."
+    )
 )
 def get_vectorstore():
 
-    if not store_exists(
-        PERSIST_DIRECTORY
-    ):
-
-        return None
-
-    return load_vectorstore(
-        PERSIST_DIRECTORY
+    chroma_directory = (
+        get_chroma_directory()
     )
 
 
+    if not store_exists(
+        chroma_directory
+    ):
+
+        raise FileNotFoundError(
+            "Chroma vector store is unavailable."
+        )
+
+
+    return load_vectorstore(
+        chroma_directory
+    )
+
+
+# ============================================================
+# INITIALIZE VECTOR STORE
+# ============================================================
+
 try:
 
-    vectorstore = get_vectorstore()
+    vectorstore = (
+        get_vectorstore()
+    )
 
 except Exception as e:
 
@@ -1302,24 +1365,6 @@ except Exception as e:
     )
 
     st.exception(e)
-
-    st.stop()
-
-
-# ============================================================
-# VECTOR STORE CHECK
-# ============================================================
-
-if vectorstore is None:
-
-    st.error(
-        "❌ No Chroma vector store was found."
-    )
-
-    st.info(
-        "Run `python 05_create_chroma_store.py` "
-        "locally to build the vector store."
-    )
 
     st.stop()
 
@@ -1355,16 +1400,21 @@ if should_analyze:
             "Add GROQ_API_KEY to Streamlit Secrets."
         )
 
-        st.session_state.auto_analyze = False
+        st.session_state.auto_analyze = (
+            False
+        )
 
 
     elif not current_query:
 
         st.warning(
-            "💡 Enter a marketing question before running the analysis."
+            "💡 Enter a marketing question "
+            "before running the analysis."
         )
 
-        st.session_state.auto_analyze = False
+        st.session_state.auto_analyze = (
+            False
+        )
 
 
     else:
@@ -1379,6 +1429,7 @@ if should_analyze:
                     api_key=groq_api_key
                 )
 
+
                 result = generate_answer(
                     current_query,
                     vectorstore,
@@ -1386,11 +1437,18 @@ if should_analyze:
                     k=5,
                 )
 
-                st.session_state.result = result
 
-                st.session_state.analysis_complete = True
+                st.session_state.result = (
+                    result
+                )
 
-                st.session_state.auto_analyze = False
+                st.session_state.analysis_complete = (
+                    True
+                )
+
+                st.session_state.auto_analyze = (
+                    False
+                )
 
                 st.rerun()
 
@@ -1399,12 +1457,17 @@ if should_analyze:
 
                 st.session_state.result = None
 
-                st.session_state.analysis_complete = False
+                st.session_state.analysis_complete = (
+                    False
+                )
 
-                st.session_state.auto_analyze = False
+                st.session_state.auto_analyze = (
+                    False
+                )
 
                 st.error(
-                    "❌ Something went wrong while generating the analysis."
+                    "❌ Something went wrong "
+                    "while generating the analysis."
                 )
 
                 st.exception(e)
@@ -1419,7 +1482,9 @@ if (
     and st.session_state.result
 ):
 
-    result = st.session_state.result
+    result = (
+        st.session_state.result
+    )
 
 
     if not isinstance(
@@ -1428,7 +1493,8 @@ if (
     ):
 
         st.error(
-            "❌ Unexpected response format from the AI engine."
+            "❌ Unexpected response format "
+            "from the AI engine."
         )
 
         st.write(
@@ -1449,39 +1515,43 @@ if (
         )
 
 
-        # ====================================================
-        # RESULT HEADER
-        # ====================================================
-
         st.divider()
 
+
         st.markdown(
-            """<div class="result-header-native">
-<div class="section-eyebrow-native">
-ANALYSIS COMPLETE
-</div>
-<h2>
-🎯 Your Marketing Intelligence
-</h2>
-<p style="color:#94a3b8;">
-AI-generated insights grounded in the
-relevant data retrieved from your knowledge base.
-</p>
-</div>""",
+            """
+            <div class="result-header-native">
+
+            <div class="section-eyebrow-native">
+            ANALYSIS COMPLETE
+            </div>
+
+            <h2>
+            🎯 Your Marketing Intelligence
+            </h2>
+
+            <p style="color:#94a3b8;">
+            AI-generated insights grounded in the
+            relevant data retrieved from your knowledge base.
+            </p>
+
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
 
-        # ====================================================
-        # AI ANALYSIS
-        # ====================================================
-
         st.markdown(
-            '<div class="insight-label-native">🧠 AI Marketing Analysis</div>',
+            '<div class="insight-label-native">'
+            '🧠 AI Marketing Analysis'
+            '</div>',
             unsafe_allow_html=True,
         )
 
-        with st.container(border=True):
+
+        with st.container(
+            border=True
+        ):
 
             if answer:
 
@@ -1496,41 +1566,47 @@ relevant data retrieved from your knowledge base.
                 )
 
 
-        # ====================================================
-        # ACTIONABLE TAKEAWAY
-        # ====================================================
-
         st.markdown(
-            """<div class="action-card-native">
-<strong>
-🚀 Recommended Next Step
-</strong>
-<br><br>
-Use the analysis above as a decision-making
-starting point, then validate the strongest
-patterns against the supporting evidence below.
-</div>""",
+            """
+            <div class="action-card-native">
+
+            <strong>
+            🚀 Recommended Next Step
+            </strong>
+
+            <br><br>
+
+            Use the analysis above as a
+            decision-making starting point,
+            then validate the strongest
+            patterns against the supporting
+            evidence below.
+
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
-
-        # ====================================================
-        # SOURCES
-        # ====================================================
 
         st.markdown("")
 
         st.markdown(
-            '<div class="section-eyebrow-native">EVIDENCE LAYER</div>',
+            '<div class="section-eyebrow-native">'
+            'EVIDENCE LAYER'
+            '</div>',
             unsafe_allow_html=True,
         )
+
 
         st.markdown(
             "## 🔎 Supporting Evidence"
         )
 
+
         st.caption(
-            "MarketPulse AI grounds its analysis in the original documents retrieved from your marketing knowledge base."
+            "MarketPulse AI grounds its analysis in the "
+            "original documents retrieved from your "
+            "marketing knowledge base."
         )
 
 
@@ -1548,11 +1624,14 @@ patterns against the supporting evidence below.
                 start=1,
             ):
 
-                metadata = getattr(
-                    doc,
-                    "metadata",
-                    {}
-                ) or {}
+                metadata = (
+                    getattr(
+                        doc,
+                        "metadata",
+                        {}
+                    )
+                    or {}
+                )
 
 
                 platform = metadata.get(
@@ -1584,7 +1663,9 @@ patterns against the supporting evidence below.
                     label
                 ):
 
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3 = (
+                        st.columns(3)
+                    )
 
 
                     with col1:
@@ -1644,19 +1725,25 @@ patterns against the supporting evidence below.
 if not st.session_state.analysis_complete:
 
     st.markdown(
-        """<div class="empty-state-native">
-<div class="empty-icon-native">
-🧠
-</div>
-<div class="empty-title-native">
-Your Marketing Intelligence Starts Here
-</div>
-<div class="empty-description-native">
-Choose an insight above or ask your own question.
-MarketPulse AI will retrieve relevant evidence,
-analyze it with AI, and surface actionable insights.
-</div>
-</div>""",
+        """
+        <div class="empty-state-native">
+
+        <div class="empty-icon-native">
+        🧠
+        </div>
+
+        <div class="empty-title-native">
+        Your Marketing Intelligence Starts Here
+        </div>
+
+        <div class="empty-description-native">
+        Choose an insight above or ask your own question.
+        MarketPulse AI will retrieve relevant evidence,
+        analyze it with AI, and surface actionable insights.
+        </div>
+
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -1666,10 +1753,16 @@ analyze it with AI, and surface actionable insights.
 # ============================================================
 
 st.markdown(
-    """<div class="footer-native">
-MarketPulse AI · AI-powered Marketing Intelligence
-<br>
-Retrieval-Augmented Generation · Chroma · Groq
-</div>""",
+    """
+    <div class="footer-native">
+
+    MarketPulse AI · AI-powered Marketing Intelligence
+
+    <br>
+
+    Retrieval-Augmented Generation · Chroma · Groq
+
+    </div>
+    """,
     unsafe_allow_html=True,
 )
