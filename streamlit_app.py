@@ -23,10 +23,12 @@ from huggingface_hub import snapshot_download
 
 def render_html(html: str) -> None:
     """
-    Render HTML safely in Streamlit.
-    Removes leading indentation that can cause Markdown
-    to interpret HTML as a code block.
+    Render raw HTML safely in Streamlit.
+
+    Removes leading whitespace from every line so Streamlit
+    Markdown does not interpret HTML as an indented code block.
     """
+
     lines = [
         line.strip()
         for line in html.strip("\n").splitlines()
@@ -63,41 +65,64 @@ BASE_DIR = os.path.dirname(
 # HUGGING FACE CHROMA CONFIG
 # ============================================================
 
-HF_REPO_ID = "amal-sherif71/marketpulse-chroma"
-HF_CHROMA_SUBFOLDER = "chroma_store"
+HF_REPO_ID = (
+    "amal-sherif71/marketpulse-chroma"
+)
+
+HF_CHROMA_SUBFOLDER = (
+    "chroma_store"
+)
 
 
 # ============================================================
 # DYNAMIC IMPORT
 # ============================================================
 
-def load_module(filename, module_name):
+def load_module(
+    filename,
+    module_name,
+):
 
     path = os.path.join(
         BASE_DIR,
         filename,
     )
 
-    if not os.path.exists(path):
+    if not os.path.exists(
+        path
+    ):
+
         raise FileNotFoundError(
             f"File not found: {filename}"
         )
 
-    spec = importlib.util.spec_from_file_location(
-        module_name,
-        path,
+    spec = (
+        importlib.util
+        .spec_from_file_location(
+            module_name,
+            path,
+        )
     )
 
-    if spec is None or spec.loader is None:
+    if (
+        spec is None
+        or spec.loader is None
+    ):
+
         raise ImportError(
             f"Could not load {filename}"
         )
 
-    module = importlib.util.module_from_spec(
-        spec
+    module = (
+        importlib.util
+        .module_from_spec(
+            spec
+        )
     )
 
-    spec.loader.exec_module(module)
+    spec.loader.exec_module(
+        module
+    )
 
     return module
 
@@ -153,22 +178,25 @@ render_html(
     """
     <style>
 
-    /* ========================================================
+    /* =====================================================
        GLOBAL APP
-    ======================================================== */
+    ===================================================== */
 
     .stApp {
+
         background:
             radial-gradient(
-                circle at 8% 0%,
-                rgba(99, 102, 241, 0.16),
+                circle at 5% 0%,
+                rgba(99,102,241,0.16),
                 transparent 28%
             ),
+
             radial-gradient(
-                circle at 92% 8%,
-                rgba(168, 85, 247, 0.12),
-                transparent 25%
+                circle at 95% 5%,
+                rgba(168,85,247,0.13),
+                transparent 26%
             ),
+
             linear-gradient(
                 135deg,
                 #070b16 0%,
@@ -180,31 +208,28 @@ render_html(
     }
 
 
-    /* ========================================================
-       HEADER
-    ======================================================== */
-
     header[data-testid="stHeader"] {
+
         background: transparent;
     }
 
 
-    /* ========================================================
-       MAIN CONTAINER
-    ======================================================== */
-
     .main .block-container {
+
         max-width: 1500px;
+
         padding-top: 2rem;
+
         padding-bottom: 4rem;
     }
 
 
-    /* ========================================================
+    /* =====================================================
        SIDEBAR
-    ======================================================== */
+    ===================================================== */
 
     section[data-testid="stSidebar"] {
+
         background:
             linear-gradient(
                 180deg,
@@ -217,40 +242,49 @@ render_html(
             rgba(255,255,255,0.07);
     }
 
+
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 {
+
         color: #f8fafc;
     }
 
+
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] li {
+
         color: #94a3b8;
     }
 
 
-    /* ========================================================
+    /* =====================================================
        TYPOGRAPHY
-    ======================================================== */
+    ===================================================== */
 
     h1,
     h2,
     h3,
     h4 {
+
         letter-spacing: -0.025em;
     }
 
+
     h1 {
+
         font-weight: 800 !important;
     }
 
 
-    /* ========================================================
+    /* =====================================================
        HERO
-    ======================================================== */
+    ===================================================== */
 
     .hero-container {
+
         padding: 3.2rem 3rem;
+
         border-radius: 28px;
 
         background:
@@ -271,7 +305,9 @@ render_html(
         margin-bottom: 2rem;
     }
 
+
     .hero-badge-native {
+
         display: inline-block;
 
         padding:
@@ -298,7 +334,9 @@ render_html(
         margin-bottom: 1rem;
     }
 
+
     .hero-title-native {
+
         font-size:
             clamp(
                 2rem,
@@ -315,7 +353,9 @@ render_html(
         margin-bottom: 1rem;
     }
 
+
     .hero-highlight {
+
         background:
             linear-gradient(
                 90deg,
@@ -325,11 +365,12 @@ render_html(
 
         -webkit-background-clip: text;
 
-        -webkit-text-fill-color:
-            transparent;
+        -webkit-text-fill-color: transparent;
     }
 
+
     .hero-subtitle-native {
+
         font-size: 1.05rem;
 
         line-height: 1.8;
@@ -340,11 +381,12 @@ render_html(
     }
 
 
-    /* ========================================================
+    /* =====================================================
        KPI CARDS
-    ======================================================== */
+    ===================================================== */
 
     .kpi-card-native {
+
         padding: 1.35rem;
 
         min-height: 135px;
@@ -372,7 +414,9 @@ render_html(
             border-color 0.2s ease;
     }
 
+
     .kpi-card-native:hover {
+
         transform:
             translateY(-4px);
 
@@ -384,69 +428,69 @@ render_html(
             rgba(99,102,241,0.18);
     }
 
+
     .kpi-icon-native {
+
         font-size: 1.5rem;
 
-        margin-bottom:
-            0.5rem;
+        margin-bottom: 0.5rem;
     }
 
+
     .kpi-title-native {
+
         color: #94a3b8;
 
         font-size: 0.75rem;
 
         font-weight: 800;
 
-        text-transform:
-            uppercase;
+        text-transform: uppercase;
 
-        letter-spacing:
-            0.08em;
+        letter-spacing: 0.08em;
     }
 
+
     .kpi-text-native {
+
         color: #f8fafc;
 
         font-size: 1rem;
 
         font-weight: 700;
 
-        margin-top:
-            0.35rem;
+        margin-top: 0.35rem;
     }
 
 
-    /* ========================================================
+    /* =====================================================
        SECTION LABELS
-    ======================================================== */
+    ===================================================== */
 
     .section-eyebrow-native {
+
         color: #818cf8;
 
         font-size: 0.72rem;
 
         font-weight: 850;
 
-        letter-spacing:
-            0.13em;
+        letter-spacing: 0.13em;
 
-        text-transform:
-            uppercase;
+        text-transform: uppercase;
 
-        margin-top:
-            1.8rem;
+        margin-top: 1.8rem;
 
-        margin-bottom:
-            0.35rem;
+        margin-bottom: 0.35rem;
     }
 
 
-    /* ========================================================
+    /* =====================================================
        EXPLORE CARDS
-    ======================================================== */
+    ===================================================== */
 
     .explore-card-native {
+
         min-height: 195px;
 
         padding: 1.25rem;
@@ -474,7 +518,9 @@ render_html(
             border-color 0.2s ease;
     }
 
+
     .explore-card-native:hover {
+
         transform:
             translateY(-4px);
 
@@ -486,25 +532,29 @@ render_html(
             rgba(168,85,247,0.18);
     }
 
+
     .explore-icon-native {
+
         font-size: 2rem;
 
-        margin-bottom:
-            0.65rem;
+        margin-bottom: 0.65rem;
     }
 
+
     .explore-title-native {
+
         color: #f8fafc;
 
         font-size: 0.98rem;
 
         font-weight: 800;
 
-        margin-bottom:
-            0.45rem;
+        margin-bottom: 0.45rem;
     }
 
+
     .explore-description-native {
+
         color: #94a3b8;
 
         font-size: 0.80rem;
@@ -513,11 +563,12 @@ render_html(
     }
 
 
-    /* ========================================================
+    /* =====================================================
        BUTTONS
-    ======================================================== */
+    ===================================================== */
 
     .stButton > button {
+
         min-height: 44px;
 
         border-radius: 12px;
@@ -537,7 +588,9 @@ render_html(
             all 0.2s ease;
     }
 
+
     .stButton > button:hover {
+
         transform:
             translateY(-2px);
 
@@ -548,7 +601,9 @@ render_html(
             rgba(51,65,85,0.92);
     }
 
+
     button[kind="primary"] {
+
         background:
             linear-gradient(
                 135deg,
@@ -556,18 +611,18 @@ render_html(
                 #8b5cf6
             ) !important;
 
-        border:
-            none !important;
+        border: none !important;
 
-        color:
-            white !important;
+        color: white !important;
 
         box-shadow:
             0 12px 30px
             rgba(99,102,241,0.25);
     }
 
+
     button[kind="primary"]:hover {
+
         background:
             linear-gradient(
                 135deg,
@@ -581,11 +636,12 @@ render_html(
     }
 
 
-    /* ========================================================
+    /* =====================================================
        TEXT AREA
-    ======================================================== */
+    ===================================================== */
 
     textarea {
+
         border-radius:
             18px !important;
 
@@ -600,7 +656,9 @@ render_html(
             rgba(148,163,184,0.16) !important;
     }
 
+
     textarea:focus {
+
         border:
             1px solid
             rgba(129,140,248,0.7) !important;
@@ -611,39 +669,104 @@ render_html(
     }
 
 
-    /* ========================================================
-       RESULT HEADER
-    ======================================================== */
+    /* =====================================================
+       RESULTS HEADER
+    ===================================================== */
 
     .result-header-native {
-        padding:
-            1.5rem
-            1.7rem;
 
-        border-radius:
-            20px;
+        padding:
+            1.8rem
+            2rem;
+
+        border-radius: 22px;
 
         background:
             linear-gradient(
                 135deg,
-                rgba(30,41,59,0.84),
-                rgba(15,23,42,0.86)
+                rgba(30,41,59,0.90),
+                rgba(15,23,42,0.94)
+            );
+
+        border:
+            1px solid
+            rgba(129,140,248,0.22);
+
+        margin-bottom: 1.2rem;
+
+        box-shadow:
+            0 20px 55px
+            rgba(0,0,0,0.20);
+    }
+
+
+    .result-status-native {
+
+        display: inline-block;
+
+        padding:
+            0.4rem
+            0.8rem;
+
+        border-radius: 999px;
+
+        background:
+            rgba(34,197,94,0.10);
+
+        border:
+            1px solid
+            rgba(34,197,94,0.25);
+
+        color:
+            #86efac;
+
+        font-size:
+            0.72rem;
+
+        font-weight: 800;
+
+        letter-spacing:
+            0.08em;
+
+        text-transform:
+            uppercase;
+    }
+
+
+    /* =====================================================
+       AI ANALYSIS CARD
+    ===================================================== */
+
+    .ai-analysis-card {
+
+        padding:
+            1.8rem;
+
+        border-radius:
+            22px;
+
+        background:
+            linear-gradient(
+                145deg,
+                rgba(30,41,59,0.88),
+                rgba(15,23,42,0.94)
             );
 
         border:
             1px solid
             rgba(129,140,248,0.18);
 
+        box-shadow:
+            0 20px 55px
+            rgba(0,0,0,0.18);
+
         margin-bottom:
-            1rem;
+            1.2rem;
     }
 
 
-    /* ========================================================
-       INSIGHT LABEL
-    ======================================================== */
-
     .insight-label-native {
+
         color:
             #a5b4fc;
 
@@ -664,58 +787,64 @@ render_html(
     }
 
 
-    /* ========================================================
-       RESULT CONTAINER
-    ======================================================== */
-
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        padding:
-            0.4rem;
-
-        border-radius:
-            22px !important;
-
-        background:
-            rgba(15,23,42,0.84);
-
-        border:
-            1px solid
-            rgba(148,163,184,0.13) !important;
-
-        box-shadow:
-            0 20px 55px
-            rgba(0,0,0,0.18);
-    }
-
-
-    /* ========================================================
-       ACTION CARD
-    ======================================================== */
+    /* =====================================================
+       RECOMMENDED ACTION
+    ===================================================== */
 
     .action-card-native {
+
         padding:
-            1.25rem;
+            1.4rem;
 
         border-radius:
-            16px;
+            18px;
 
         background:
-            rgba(30,41,59,0.68);
+            linear-gradient(
+                135deg,
+                rgba(99,102,241,0.10),
+                rgba(168,85,247,0.08)
+            );
 
         border:
             1px solid
-            rgba(148,163,184,0.10);
+            rgba(129,140,248,0.20);
 
         margin-top:
             1rem;
     }
 
 
-    /* ========================================================
+    /* =====================================================
+       EVIDENCE
+    ===================================================== */
+
+    .evidence-summary-card {
+
+        padding:
+            1.2rem;
+
+        border-radius:
+            18px;
+
+        background:
+            rgba(15,23,42,0.65);
+
+        border:
+            1px solid
+            rgba(148,163,184,0.12);
+
+        margin-bottom:
+            1rem;
+    }
+
+
+    /* =====================================================
        EMPTY STATE
-    ======================================================== */
+    ===================================================== */
 
     .empty-state-native {
+
         padding:
             3rem;
 
@@ -736,7 +865,9 @@ render_html(
             1.5rem;
     }
 
+
     .empty-icon-native {
+
         font-size:
             3rem;
 
@@ -744,7 +875,9 @@ render_html(
             0.8rem;
     }
 
+
     .empty-title-native {
+
         font-size:
             1.2rem;
 
@@ -755,7 +888,9 @@ render_html(
             #f8fafc;
     }
 
+
     .empty-description-native {
+
         color:
             #94a3b8;
 
@@ -767,11 +902,12 @@ render_html(
     }
 
 
-    /* ========================================================
+    /* =====================================================
        FOOTER
-    ======================================================== */
+    ===================================================== */
 
     .footer-native {
+
         text-align:
             center;
 
@@ -793,24 +929,29 @@ render_html(
     }
 
 
-    /* ========================================================
+    /* =====================================================
        MOBILE
-    ======================================================== */
+    ===================================================== */
 
     @media (max-width: 768px) {
 
         .hero-container {
+
             padding:
                 2rem
                 1.4rem;
         }
 
+
         .hero-title-native {
+
             font-size:
                 2rem;
         }
 
+
         .kpi-card-native {
+
             min-height:
                 110px;
         }
@@ -827,15 +968,22 @@ render_html(
 # ============================================================
 
 if "query" not in st.session_state:
+
     st.session_state.query = ""
 
+
 if "result" not in st.session_state:
+
     st.session_state.result = None
 
+
 if "analysis_complete" not in st.session_state:
+
     st.session_state.analysis_complete = False
 
+
 if "auto_analyze" not in st.session_state:
+
     st.session_state.auto_analyze = False
 
 
@@ -845,9 +993,9 @@ if "auto_analyze" not in st.session_state:
 
 try:
 
-    groq_api_key = st.secrets[
-        "GROQ_API_KEY"
-    ]
+    groq_api_key = (
+        st.secrets["GROQ_API_KEY"]
+    )
 
     os.environ[
         "GROQ_API_KEY"
@@ -860,9 +1008,9 @@ except Exception:
 
 try:
 
-    hf_token = st.secrets[
-        "HF_TOKEN"
-    ]
+    hf_token = (
+        st.secrets["HF_TOKEN"]
+    )
 
     os.environ[
         "HF_TOKEN"
@@ -895,15 +1043,15 @@ with st.sidebar:
 
     st.markdown(
         """
-        📈 **Top Performing Content**
+📈 **Top Performing Content**
 
-        🔥 **Engagement Drivers**
+🔥 **Engagement Drivers**
 
-        👥 **Audience Trends**
+👥 **Audience Trends**
 
-        💡 **Content Opportunities**
+💡 **Content Opportunities**
 
-        🏆 **Platform Performance**
+🏆 **Platform Performance**
         """
     )
 
@@ -915,21 +1063,21 @@ with st.sidebar:
 
     st.markdown(
         """
-        **01 — Ask**
+**01 — Ask**
 
-        Ask a marketing question.
+Ask a marketing question.
 
-        **02 — Retrieve**
+**02 — Retrieve**
 
-        Relevant marketing data is retrieved.
+Relevant marketing data is retrieved.
 
-        **03 — Analyze**
+**03 — Analyze**
 
-        AI analyzes the retrieved evidence.
+AI analyzes the retrieved evidence.
 
-        **04 — Act**
+**04 — Act**
 
-        Turn insights into actionable decisions.
+Turn insights into actionable decisions.
         """
     )
 
@@ -977,6 +1125,7 @@ render_html(
 # ============================================================
 
 kpi_cols = st.columns(4)
+
 
 kpi_data = [
 
@@ -1043,7 +1192,9 @@ st.markdown("")
 # ============================================================
 
 st.markdown(
-    '<div class="section-eyebrow-native">DISCOVER INSIGHTS</div>',
+    '<div class="section-eyebrow-native">'
+    'DISCOVER INSIGHTS'
+    '</div>',
     unsafe_allow_html=True,
 )
 
@@ -1108,9 +1259,13 @@ for i, item in enumerate(
 ):
 
     icon = item[0]
+
     title = item[1]
+
     question = item[2]
+
     description = item[3]
+
 
     with columns[i]:
 
@@ -1134,7 +1289,9 @@ for i, item in enumerate(
             """
         )
 
+
         st.markdown("")
+
 
         if st.button(
             "Explore →",
@@ -1142,13 +1299,21 @@ for i, item in enumerate(
             use_container_width=True,
         ):
 
-            st.session_state.query = question
+            st.session_state.query = (
+                question
+            )
 
-            st.session_state.result = None
+            st.session_state.result = (
+                None
+            )
 
-            st.session_state.analysis_complete = False
+            st.session_state.analysis_complete = (
+                False
+            )
 
-            st.session_state.auto_analyze = True
+            st.session_state.auto_analyze = (
+                True
+            )
 
             st.rerun()
 
@@ -1159,14 +1324,19 @@ for i, item in enumerate(
 
 st.markdown("")
 
+
 st.markdown(
-    '<div class="section-eyebrow-native">ASK YOUR DATA</div>',
+    '<div class="section-eyebrow-native">'
+    'ASK YOUR DATA'
+    '</div>',
     unsafe_allow_html=True,
 )
+
 
 st.markdown(
     "## 🧠 Ask MarketPulse AI"
 )
+
 
 st.caption(
     "Ask a question about your marketing data and get an evidence-grounded AI analysis."
@@ -1176,7 +1346,9 @@ st.caption(
 query = st.text_area(
     "Marketing Question",
 
-    value=st.session_state.query,
+    value=(
+        st.session_state.query
+    ),
 
     placeholder=(
         "Example: Which content themes drive the most engagement?"
@@ -1228,13 +1400,21 @@ for i, question in enumerate(
             use_container_width=True,
         ):
 
-            st.session_state.query = question
+            st.session_state.query = (
+                question
+            )
 
-            st.session_state.result = None
+            st.session_state.result = (
+                None
+            )
 
-            st.session_state.analysis_complete = False
+            st.session_state.analysis_complete = (
+                False
+            )
 
-            st.session_state.auto_analyze = True
+            st.session_state.auto_analyze = (
+                True
+            )
 
             st.rerun()
 
@@ -1245,9 +1425,12 @@ for i, question in enumerate(
 
 st.markdown("")
 
+
 analyze_clicked = st.button(
     "✨ Analyze & Discover Insights",
+
     type="primary",
+
     use_container_width=True,
 )
 
@@ -1266,6 +1449,7 @@ def get_chroma_directory():
         "chroma_store",
     )
 
+
     if os.path.isdir(
         local_chroma
     ):
@@ -1275,9 +1459,9 @@ def get_chroma_directory():
 
     try:
 
-        hf_token = st.secrets[
-            "HF_TOKEN"
-        ]
+        hf_token = (
+            st.secrets["HF_TOKEN"]
+        )
 
     except Exception:
 
@@ -1290,16 +1474,18 @@ def get_chroma_directory():
         "☁️ Downloading MarketPulse AI knowledge base..."
     ):
 
-        snapshot_path = snapshot_download(
-            repo_id=HF_REPO_ID,
+        snapshot_path = (
+            snapshot_download(
+                repo_id=HF_REPO_ID,
 
-            repo_type="dataset",
+                repo_type="dataset",
 
-            token=hf_token,
+                token=hf_token,
 
-            allow_patterns=[
-                "chroma_store/**",
-            ],
+                allow_patterns=[
+                    "chroma_store/**",
+                ],
+            )
         )
 
 
@@ -1347,7 +1533,9 @@ def get_vectorstore():
 
 try:
 
-    vectorstore = get_vectorstore()
+    vectorstore = (
+        get_vectorstore()
+    )
 
 except Exception as e:
 
@@ -1357,18 +1545,18 @@ except Exception as e:
 
     st.markdown(
         """
-        ### 🔧 Deployment Diagnostics
+### 🔧 Deployment Diagnostics
 
-        MarketPulse AI could not load the marketing
-        knowledge base.
+MarketPulse AI could not load the marketing
+knowledge base.
 
-        Please verify:
+Please verify:
 
-        1. `HF_TOKEN` exists in Streamlit Secrets.
-        2. The Hugging Face repository is accessible.
-        3. The repository is:
-           `amal-sherif71/marketpulse-chroma`
-        4. The Chroma files were uploaded successfully.
+1. `HF_TOKEN` exists in Streamlit Secrets.
+2. The Hugging Face repository is accessible.
+3. The repository is:
+   `amal-sherif71/marketpulse-chroma`
+4. The Chroma files were uploaded successfully.
         """
     )
 
@@ -1386,16 +1574,22 @@ except Exception as e:
 # ============================================================
 
 should_analyze = (
+
     analyze_clicked
+
     or st.session_state.auto_analyze
+
 )
 
 
 if should_analyze:
 
     current_query = (
+
         st.session_state.query
+
         or ""
+
     ).strip()
 
 
@@ -1409,7 +1603,9 @@ if should_analyze:
             "Add GROQ_API_KEY to Streamlit Secrets."
         )
 
-        st.session_state.auto_analyze = False
+        st.session_state.auto_analyze = (
+            False
+        )
 
 
     elif not current_query:
@@ -1419,7 +1615,9 @@ if should_analyze:
             "before running the analysis."
         )
 
-        st.session_state.auto_analyze = False
+        st.session_state.auto_analyze = (
+            False
+        )
 
 
     else:
@@ -1436,6 +1634,7 @@ if should_analyze:
 
 
                 result = generate_answer(
+
                     current_query,
 
                     vectorstore,
@@ -1443,30 +1642,50 @@ if should_analyze:
                     llm,
 
                     k=5,
+
                 )
 
 
-                st.session_state.result = result
+                st.session_state.result = (
+                    result
+                )
 
-                st.session_state.analysis_complete = True
 
-                st.session_state.auto_analyze = False
+                st.session_state.analysis_complete = (
+                    True
+                )
+
+
+                st.session_state.auto_analyze = (
+                    False
+                )
+
 
                 st.rerun()
 
 
             except Exception as e:
 
-                st.session_state.result = None
+                st.session_state.result = (
+                    None
+                )
 
-                st.session_state.analysis_complete = False
 
-                st.session_state.auto_analyze = False
+                st.session_state.analysis_complete = (
+                    False
+                )
+
+
+                st.session_state.auto_analyze = (
+                    False
+                )
+
 
                 st.error(
                     "❌ Something went wrong "
                     "while generating the analysis."
                 )
+
 
                 with st.expander(
                     "Show technical error"
@@ -1480,11 +1699,16 @@ if should_analyze:
 # ============================================================
 
 if (
+
     st.session_state.analysis_complete
+
     and st.session_state.result
+
 ):
 
-    result = st.session_state.result
+    result = (
+        st.session_state.result
+    )
 
 
     if not isinstance(
@@ -1516,19 +1740,19 @@ if (
         )
 
 
+        # ====================================================
+        # RESULT HEADER
+        # ====================================================
+
         st.divider()
 
-
-        # ====================================================
-        # ANALYSIS HEADER
-        # ====================================================
 
         render_html(
             """
             <div class="result-header-native">
 
-            <div class="section-eyebrow-native">
-            ANALYSIS COMPLETE
+            <div class="result-status-native">
+            ✓ ANALYSIS COMPLETE
             </div>
 
             <h2>
@@ -1536,8 +1760,8 @@ if (
             </h2>
 
             <p style="color:#94a3b8;">
-            AI-generated insights grounded in the
-            relevant data retrieved from your knowledge base.
+            AI-generated insights grounded in relevant evidence
+            retrieved from your marketing knowledge base.
             </p>
 
             </div>
@@ -1546,7 +1770,41 @@ if (
 
 
         # ====================================================
-        # AI ANALYSIS LABEL
+        # RESULT SNAPSHOT
+        # ====================================================
+
+        snapshot_cols = st.columns(3)
+
+
+        with snapshot_cols[0]:
+
+            st.metric(
+                "🧠 AI Analysis",
+                "Ready",
+            )
+
+
+        with snapshot_cols[1]:
+
+            st.metric(
+                "🔎 Evidence Sources",
+                len(sources),
+            )
+
+
+        with snapshot_cols[2]:
+
+            st.metric(
+                "⚡ Decision Mode",
+                "Actionable",
+            )
+
+
+        st.markdown("")
+
+
+        # ====================================================
+        # AI ANALYSIS
         # ====================================================
 
         render_html(
@@ -1558,25 +1816,31 @@ if (
         )
 
 
-        # ====================================================
-        # AI ANSWER
-        # ====================================================
+        render_html(
+            """
+            <div class="ai-analysis-card">
+            """
+        )
 
-        with st.container(
-            border=True
-        ):
 
-            if answer:
+        if answer:
 
-                st.markdown(
-                    answer
-                )
+            st.markdown(
+                answer
+            )
 
-            else:
+        else:
 
-                st.warning(
-                    "No AI analysis was returned."
-                )
+            st.warning(
+                "No AI analysis was returned."
+            )
+
+
+        render_html(
+            """
+            </div>
+            """
+        )
 
 
         # ====================================================
@@ -1624,11 +1888,129 @@ if (
 
 
         st.caption(
-            "MarketPulse AI grounds its analysis in the "
-            "original documents retrieved from your "
-            "marketing knowledge base."
+            "MarketPulse AI grounds its analysis in the original "
+            "documents retrieved from your marketing knowledge base."
         )
 
+
+        # ====================================================
+        # SOURCE SUMMARY
+        # ====================================================
+
+        if sources:
+
+            platforms = []
+
+            categories = []
+
+
+            for doc in sources:
+
+                metadata = (
+
+                    getattr(
+
+                        doc,
+
+                        "metadata",
+
+                        {},
+
+                    )
+
+                    or {}
+
+                )
+
+
+                platform = metadata.get(
+                    "platform"
+                )
+
+
+                category = metadata.get(
+                    "category"
+                )
+
+
+                if platform:
+
+                    platforms.append(
+                        str(platform)
+                    )
+
+
+                if category:
+
+                    categories.append(
+                        str(category)
+                    )
+
+
+            unique_platforms = (
+                sorted(
+                    set(
+                        platforms
+                    )
+                )
+            )
+
+
+            unique_categories = (
+                sorted(
+                    set(
+                        categories
+                    )
+                )
+            )
+
+
+            render_html(
+                f"""
+                <div class="evidence-summary-card">
+
+                <strong>
+                📚 Evidence Overview
+                </strong>
+
+                <br><br>
+
+                <span style="color:#94a3b8;">
+                Sources analyzed:
+                </span>
+
+                <strong>
+                {len(sources)}
+                </strong>
+
+                &nbsp;&nbsp;•&nbsp;&nbsp;
+
+                <span style="color:#94a3b8;">
+                Platforms:
+                </span>
+
+                <strong>
+                {", ".join(unique_platforms) if unique_platforms else "Unknown"}
+                </strong>
+
+                <br><br>
+
+                <span style="color:#94a3b8;">
+                Categories:
+                </span>
+
+                <strong>
+                {", ".join(unique_categories) if unique_categories else "Unknown"}
+                </strong>
+
+                </div>
+                """
+            )
+
+
+        # ====================================================
+        # SOURCE DETAILS
+        # ====================================================
 
         if not sources:
 
@@ -1640,51 +2022,78 @@ if (
         else:
 
             for i, doc in enumerate(
+
                 sources,
+
                 start=1,
+
             ):
 
                 metadata = (
+
                     getattr(
+
                         doc,
+
                         "metadata",
-                        {}
+
+                        {},
+
                     )
+
                     or {}
+
                 )
 
 
                 platform = metadata.get(
+
                     "platform",
+
                     "Unknown",
+
                 )
 
 
                 category = metadata.get(
+
                     "category",
+
                     "Unknown",
+
                 )
 
 
                 content_id = metadata.get(
+
                     "content_id",
+
                     "Unknown",
+
                 )
 
 
                 label = (
+
                     f"🔎 Source {i}  •  "
+
                     f"{platform}  •  "
+
                     f"{category}"
+
                 )
 
 
                 with st.expander(
+
                     label
+
                 ):
 
                     col1, col2, col3 = (
+
                         st.columns(3)
+
                     )
 
 
@@ -1730,12 +2139,45 @@ if (
 
 
                     st.write(
+
                         getattr(
+
                             doc,
+
                             "page_content",
+
                             "No content available.",
+
                         )
+
                     )
+
+
+        # ====================================================
+        # CLEAR ANALYSIS
+        # ====================================================
+
+        st.markdown("")
+
+
+        if st.button(
+            "↺ Start New Analysis",
+            use_container_width=True,
+        ):
+
+            st.session_state.query = ""
+
+            st.session_state.result = None
+
+            st.session_state.analysis_complete = (
+                False
+            )
+
+            st.session_state.auto_analyze = (
+                False
+            )
+
+            st.rerun()
 
 
 # ============================================================
