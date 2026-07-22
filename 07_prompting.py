@@ -1,24 +1,31 @@
 """
 07_prompting.py
 -----------------
-Pipeline stage 7: PROMPTING
+Pipeline stage 7: PROMPTING + VERIFIED ANALYTICS
 
 MarketPulse AI
 Premium AI-powered Marketing Intelligence
 
-Responsibilities:
-- Retrieve relevant marketing evidence.
-- Analyze only retrieved data.
-- Produce structured marketing intelligence.
-- Enforce source attribution.
-- Prevent unsupported claims.
-- Distinguish facts from interpretations.
-- Separate insights from recommendations.
-- Return raw sources for UI verification.
+Pipeline:
+1. Retrieve relevant documents from Chroma.
+2. Extract measurable metrics using Python.
+3. Calculate verified metric leaders.
+4. Build a verified analytics summary.
+5. Send verified evidence to the LLM.
+6. Let the LLM interpret the evidence and generate recommendations.
+
+Important:
+- Python handles numerical comparisons.
+- The LLM handles interpretation and marketing intelligence.
+- No invented engagement scores.
+- Views are separated from engagement metrics.
+- Source attribution is preserved.
 """
 
 import importlib.util
 import os
+import re
+from statistics import mean
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -55,6 +62,7 @@ def _import(
     )
 
     if spec is None or spec.loader is None:
+
         raise ImportError(
             f"Could not load module: {module_filename}"
         )
@@ -103,187 +111,708 @@ DEFAULT_MODEL = (
 
 
 # ============================================================
-# MARKETPULSE AI SYSTEM PROMPT
+# METRIC EXTRACTION HELPERS
+# ============================================================
+
+def _extract_number(
+    text,
+    label,
+):
+    """
+    Extract a numeric metric from retrieved content.
+
+    Example:
+    Likes: 1551
+    Views: 10106
+    """
+
+    if not text:
+
+        return None
+
+    pattern = (
+        rf"{label}\s*:\s*"
+        rf"([\d,]+)"
+    )
+
+    match = re.search(
+        pattern,
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    if not match:
+
+        return None
+
+    value = (
+        match.group(1)
+        .replace(",", "")
+    )
+
+    try:
+
+        return int(value)
+
+    except ValueError:
+
+        return None
+
+
+# ============================================================
+# EXTRACT DOCUMENT METRICS
+# ============================================================
+
+def extract_document_metrics(
+    doc,
+    source_number,
+):
+    """
+    Extract structured marketing metrics
+    from a retrieved LangChain document.
+    """
+
+    metadata = (
+        getattr(
+            doc,
+            "metadata",
+            {}
+        )
+        or {}
+    )
+
+    content = (
+        getattr(
+            doc,
+            "page_content",
+            ""
+        )
+        or ""
+    )
+
+
+    # --------------------------------------------------------
+    # CONTENT ID
+    # --------------------------------------------------------
+
+    content_id = metadata.get(
+        "content_id"
+    )
+
+    if not content:
+
+        match = re.search(
+            r"Content\s*ID\s*:\s*([A-Za-z0-9_-]+)",
+            content,
+            flags=re.IGNORECASE,
+        )
+
+        if match:
+
+            content_id = (
+                match.group(1)
+            )
+
+    if not content_id:
+
+        content_id = (
+            f"Unknown Content {source_number}"
+        )
+
+
+    # --------------------------------------------------------
+    # PLATFORM
+    # --------------------------------------------------------
+
+    platform = metadata.get(
+        "platform"
+    )
+
+    if not platform:
+
+        match = re.search(
+            r"Platform\s*:\s*([^\n]+)",
+            content,
+            flags=re.IGNORECASE,
+        )
+
+        if match:
+
+            platform = (
+                match.group(1)
+                .strip()
+            )
+
+    if not platform:
+
+        platform = "Unknown"
+
+
+    # --------------------------------------------------------
+    # CATEGORY
+    # --------------------------------------------------------
+
+    category = metadata.get(
+        "category"
+    )
+
+    if not category:
+
+        match = re.search(
+            r"Category\s*:\s*([^\n]+)",
+            content,
+            flags=re.IGNORECASE,
+        )
+
+        if match:
+
+            category = (
+                match.group(1)
+                .strip()
+            )
+
+    if not category:
+
+        category = "Unknown"
+
+
+    # --------------------------------------------------------
+    # METRICS
+    # --------------------------------------------------------
+
+    views = _extract_number(
+        content,
+        "Views",
+    )
+
+    likes = _extract_number(
+        content,
+        "Likes",
+    )
+
+    comments = _extract_number(
+        content,
+        "Comments",
+    )
+
+    shares = _extract_number(
+        content,
+        "Shares",
+    )
+
+
+    return {
+
+        "source": source_number,
+
+        "content_id": content_id,
+
+        "platform": platform,
+
+        "category": category,
+
+        "views": views,
+
+        "likes": likes,
+
+        "comments": comments,
+
+        "shares": shares,
+
+    }
+
+
+# ============================================================
+# BUILD VERIFIED ANALYTICS
+# ============================================================
+
+def build_verified_analytics(
+    docs,
+):
+    """
+    Calculate verified rankings using Python.
+
+    The LLM does NOT calculate these values.
+
+    This prevents errors such as:
+    claiming 10,106 Views is higher than 10,164 Views.
+    """
+
+    records = []
+
+    for index, doc in enumerate(
+        docs,
+        start=1,
+    ):
+
+        record = extract_document_metrics(
+            doc,
+            index,
+        )
+
+        records.append(
+            record
+        )
+
+
+    # --------------------------------------------------------
+    # METRIC LEADER HELPER
+    # --------------------------------------------------------
+
+    def get_leader(
+        metric_name,
+    ):
+
+        valid_records = [
+
+            record
+
+            for record in records
+
+            if record.get(
+                metric_name
+            ) is not None
+
+        ]
+
+        if not valid_records:
+
+            return None
+
+        return max(
+            valid_records,
+            key=lambda x: x[
+                metric_name
+            ],
+        )
+
+
+    # --------------------------------------------------------
+    # LEADERS
+    # --------------------------------------------------------
+
+    highest_views = get_leader(
+        "views"
+    )
+
+    highest_likes = get_leader(
+        "likes"
+    )
+
+    highest_comments = get_leader(
+        "comments"
+    )
+
+    highest_shares = get_leader(
+        "shares"
+    )
+
+
+    # --------------------------------------------------------
+    # AVERAGES
+    # --------------------------------------------------------
+
+    def calculate_average(
+        metric_name,
+    ):
+
+        values = [
+
+            record[metric_name]
+
+            for record in records
+
+            if record.get(
+                metric_name
+            ) is not None
+
+        ]
+
+        if not values:
+
+            return None
+
+        return round(
+            mean(values),
+            2,
+        )
+
+
+    average_views = calculate_average(
+        "views"
+    )
+
+    average_likes = calculate_average(
+        "likes"
+    )
+
+    average_comments = calculate_average(
+        "comments"
+    )
+
+    average_shares = calculate_average(
+        "shares"
+    )
+
+
+    # --------------------------------------------------------
+    # BUILD VERIFIED SUMMARY
+    # --------------------------------------------------------
+
+    lines = []
+
+    lines.append(
+        "VERIFIED ANALYTICS SUMMARY"
+    )
+
+    lines.append(
+        "The following values were calculated "
+        "programmatically from the retrieved documents."
+    )
+
+    lines.append(
+        "The LLM must treat these values as verified "
+        "for the retrieved sample."
+    )
+
+    lines.append("")
+
+
+    # --------------------------------------------------------
+    # DATASET SIZE
+    # --------------------------------------------------------
+
+    lines.append(
+        f"Retrieved content items: {len(records)}"
+    )
+
+    lines.append("")
+
+
+    # --------------------------------------------------------
+    # HIGHEST VIEWS
+    # --------------------------------------------------------
+
+    if highest_views:
+
+        lines.append(
+            "Highest Views:"
+        )
+
+        lines.append(
+            f"- {highest_views['content_id']} "
+            f"with {highest_views['views']:,} Views "
+            f"[Source {highest_views['source']}]"
+        )
+
+    else:
+
+        lines.append(
+            "Highest Views: Not available"
+        )
+
+
+    # --------------------------------------------------------
+    # HIGHEST LIKES
+    # --------------------------------------------------------
+
+    if highest_likes:
+
+        lines.append(
+            "Highest Likes:"
+        )
+
+        lines.append(
+            f"- {highest_likes['content_id']} "
+            f"with {highest_likes['likes']:,} Likes "
+            f"[Source {highest_likes['source']}]"
+        )
+
+    else:
+
+        lines.append(
+            "Highest Likes: Not available"
+        )
+
+
+    # --------------------------------------------------------
+    # HIGHEST COMMENTS
+    # --------------------------------------------------------
+
+    if highest_comments:
+
+        lines.append(
+            "Highest Comments:"
+        )
+
+        lines.append(
+            f"- {highest_comments['content_id']} "
+            f"with {highest_comments['comments']:,} Comments "
+            f"[Source {highest_comments['source']}]"
+        )
+
+    else:
+
+        lines.append(
+            "Highest Comments: Not available"
+        )
+
+
+    # --------------------------------------------------------
+    # HIGHEST SHARES
+    # --------------------------------------------------------
+
+    if highest_shares:
+
+        lines.append(
+            "Highest Shares:"
+        )
+
+        lines.append(
+            f"- {highest_shares['content_id']} "
+            f"with {highest_shares['shares']:,} Shares "
+            f"[Source {highest_shares['source']}]"
+        )
+
+    else:
+
+        lines.append(
+            "Highest Shares: Not available"
+        )
+
+
+    # --------------------------------------------------------
+    # AVERAGES
+    # --------------------------------------------------------
+
+    lines.append("")
+
+    lines.append(
+        "Retrieved Sample Averages:"
+    )
+
+
+    if average_views is not None:
+
+        lines.append(
+            f"- Average Views: "
+            f"{average_views:,}"
+        )
+
+
+    if average_likes is not None:
+
+        lines.append(
+            f"- Average Likes: "
+            f"{average_likes:,}"
+        )
+
+
+    if average_comments is not None:
+
+        lines.append(
+            f"- Average Comments: "
+            f"{average_comments:,}"
+        )
+
+
+    if average_shares is not None:
+
+        lines.append(
+            f"- Average Shares: "
+            f"{average_shares:,}"
+        )
+
+
+    # --------------------------------------------------------
+    # CONTENT RECORDS
+    # --------------------------------------------------------
+
+    lines.append("")
+
+    lines.append(
+        "Verified Content Records:"
+    )
+
+
+    for record in records:
+
+        metrics = []
+
+        if record["views"] is not None:
+
+            metrics.append(
+                f"Views={record['views']:,}"
+            )
+
+        if record["likes"] is not None:
+
+            metrics.append(
+                f"Likes={record['likes']:,}"
+            )
+
+        if record["comments"] is not None:
+
+            metrics.append(
+                f"Comments={record['comments']:,}"
+            )
+
+        if record["shares"] is not None:
+
+            metrics.append(
+                f"Shares={record['shares']:,}"
+            )
+
+
+        metric_text = (
+            ", ".join(metrics)
+            if metrics
+            else "No measurable metrics"
+        )
+
+
+        lines.append(
+
+            f"- {record['content_id']} | "
+            f"Platform={record['platform']} | "
+            f"Category={record['category']} | "
+            f"{metric_text} | "
+            f"[Source {record['source']}]"
+
+        )
+
+
+    return "\n".join(
+        lines
+    )
+
+
+# ============================================================
+# PROMPT TEMPLATE
 # ============================================================
 
 PROMPT_TEMPLATE = """
 You are MarketPulse AI, an expert Senior Marketing Intelligence Analyst.
 
-Your job is to analyze retrieved social media marketing data and transform
-it into accurate, evidence-grounded, decision-ready marketing intelligence.
-
-You are NOT a generic chatbot.
+Your job is to transform verified marketing data into clear,
+accurate, actionable business intelligence.
 
 You are an evidence-first marketing intelligence system.
 
 ============================================================
-CORE DATA RULES
+CRITICAL RULE
 ============================================================
 
-1. Use ONLY the retrieved context provided below.
+Python has already calculated the numerical rankings.
 
-2. NEVER invent:
-   - statistics
-   - percentages
-   - averages
-   - rankings
-   - trends
-   - audience characteristics
-   - platform performance
-   - causes
-   - business outcomes
-   - facts not explicitly supported by the retrieved context
+DO NOT recalculate or override the verified analytics.
 
-3. Every factual claim must include a source citation.
+Use the VERIFIED ANALYTICS SUMMARY as the authoritative source
+for numerical rankings.
 
-4. Use source citations exactly in this format:
+The verified analytics were calculated programmatically.
+
+You must NOT contradict them.
+
+============================================================
+DATA RULES
+============================================================
+
+1. Use ONLY the retrieved context and verified analytics.
+
+2. Never invent statistics, percentages, rankings, trends,
+   audience characteristics, or business facts.
+
+3. Every factual claim must include source citations.
+
+4. Use citations exactly like:
 
    [Source 1]
-   [Source 2]
-   [Source 3]
 
-5. When multiple sources support a claim, cite all relevant sources.
+   [Source 2]
+
+5. If multiple sources support a claim, cite all relevant sources.
 
 6. Never cite a source that does not support the claim.
 
-7. If evidence is insufficient, explicitly say that the evidence is
-   insufficient.
+7. If evidence is insufficient, explicitly say so.
 
-8. Never pretend that a small retrieved sample represents the entire
-   marketing dataset.
+8. Do not claim causation from correlation.
 
-9. Never claim causation from correlation.
+9. Distinguish clearly between:
 
-10. Clearly distinguish:
-    - Observed Fact
-    - Observed Pattern
-    - Possible Interpretation
-    - Recommendation
+   - Observed Fact
+   - Observed Pattern
+   - Possible Interpretation
+   - Recommendation
 
 ============================================================
-NUMERIC ACCURACY RULES
+ENGAGEMENT RULES
 ============================================================
 
-These rules are extremely important.
+Do NOT automatically equate Views with Engagement.
 
-1. Carefully compare numerical values before making rankings.
-
-2. NEVER say that Content A performs better than Content B if the
-   relevant metric is actually lower.
-
-3. If the user asks which content performs best, first determine which
-   metric is being used.
-
-4. If the question is about "engagement", do NOT automatically use Views
-   as the only definition of engagement.
-
-5. Consider the available engagement metrics separately:
-
-   - Views
-   - Likes
-   - Comments
-   - Shares
-
-6. If a single combined engagement score is NOT explicitly available,
-   do NOT invent one.
-
-7. If the evidence contains multiple metrics that lead to different
-   winners, clearly explain the distinction.
-
-Example:
-
-"Content A has the highest Views, while Content B has the highest Likes."
-
-8. Never call a content item "the best overall" unless the retrieved
-   evidence clearly supports that conclusion.
-
-9. If the user's question is ambiguous, state the metric used for the
-   conclusion.
-
-10. When presenting rankings, always verify the numerical order.
-
-============================================================
-ANALYTICAL DISCIPLINE
-============================================================
-
-When analyzing the evidence:
-
-STEP 1:
-Identify exactly what the user is asking.
-
-STEP 2:
-Identify which metrics are relevant to the question.
-
-STEP 3:
-Compare only the retrieved evidence.
-
-STEP 4:
-Determine whether the evidence supports:
-- a direct finding
-- a pattern
-- a possible interpretation
-- or no reliable conclusion
-
-STEP 5:
-State the conclusion conservatively.
-
-STEP 6:
-Provide actionable recommendations that logically follow from the
-evidence.
-
-============================================================
-ENGAGEMENT ANALYSIS
-============================================================
-
-When discussing engagement:
-
-Do NOT assume:
-
-More Views = More Engagement.
-
-Views measure reach or exposure.
+Views represent reach or exposure.
 
 Likes, Comments, and Shares are engagement signals.
 
-If the data contains all of these metrics, analyze them separately.
+When the user asks:
 
-For example:
+"Which content performs best based on engagement?"
 
-- Highest Views
+Analyze the engagement signals separately.
+
+Use:
+
 - Highest Likes
 - Highest Comments
 - Highest Shares
 
-If no single metric consistently identifies one winner, say so.
+Do NOT invent a combined engagement score.
 
-Do not create an engagement score unless the data explicitly provides one.
+If one content item leads multiple engagement metrics,
+you may describe it as the strongest engagement leader
+for the retrieved sample.
+
+If different content items lead different metrics,
+clearly explain the difference.
 
 ============================================================
-PLATFORM ANALYSIS
+REACH VS ENGAGEMENT
+============================================================
+
+Always distinguish:
+
+Reach Leader:
+Content with the highest Views.
+
+Engagement Leader:
+Content that leads the available interaction metrics.
+
+Example:
+
+"content_31417 has the highest Views, while content_29243 leads
+the available Likes, Comments, and Shares metrics."
+
+This distinction is important.
+
+============================================================
+PLATFORM RULES
 ============================================================
 
 Only compare platforms when comparable evidence exists.
 
-If YouTube has detailed metrics and Instagram does not have comparable
-metrics in the retrieved evidence, do NOT claim that YouTube performs
-better overall.
-
-Instead say:
-
-"The retrieved evidence provides stronger measurable data for YouTube,
-so a reliable cross-platform comparison cannot yet be made."
+Do not claim one platform is better overall unless the retrieved
+evidence supports a fair comparison.
 
 ============================================================
-CATEGORY ANALYSIS
+CATEGORY RULES
 ============================================================
 
-Only identify a category as a high-performing category if the retrieved
-evidence supports the comparison.
+Do not claim that an entire category performs better based on
+one or two content items.
 
-Do not assume that one or two high-performing pieces prove that the
-entire category performs better.
-
-Use language such as:
+Use conservative language:
 
 "The retrieved sample suggests..."
 
@@ -295,48 +824,38 @@ Use language such as:
 RECOMMENDATION RULES
 ============================================================
 
-Recommendations must be logically connected to the retrieved evidence.
+Recommendations must be logically connected to the evidence.
 
-Good recommendation:
+Prefer recommendations such as:
 
-"Validate the observed beauty-content engagement pattern with a larger
-sample before scaling the strategy."
+- validate the observed pattern with more data
+- analyze high-performing content
+- compare engagement metrics
+- test similar content formats
+- monitor future performance
+- build a data-backed content calendar
 
-Bad recommendation:
-
-"Invest more money in beauty advertising."
-
-unless the retrieved evidence explicitly supports that decision.
-
-Do NOT recommend:
-- influencer partnerships
-- sponsored campaigns
-- paid advertising
-- budget increases
-- business expansion
-
-unless the evidence directly supports such recommendations or they are
-clearly framed as optional experiments rather than proven strategies.
+Do not recommend paid campaigns, influencer partnerships,
+or budget increases unless the evidence supports them.
 
 ============================================================
 DECISION SIGNAL
 ============================================================
 
-Use one of these three decision signals:
+Choose exactly one:
 
 HIGH SIGNAL
-Use only when the retrieved evidence is consistent and directly supports
-the conclusion.
 
 MODERATE SIGNAL
-Use when the evidence suggests a meaningful pattern but more validation
-is needed.
 
 LOW SIGNAL
-Use when the evidence is limited, mixed, incomplete, or insufficient.
 
-Never use HIGH SIGNAL for a small sample unless the evidence is unusually
-strong and consistent.
+Use HIGH SIGNAL only when the evidence is strong and consistent.
+
+Use MODERATE SIGNAL when the evidence suggests a pattern
+but more validation is needed.
+
+Use LOW SIGNAL when evidence is limited, mixed, or insufficient.
 
 ============================================================
 RESPONSE STRUCTURE
@@ -346,56 +865,51 @@ Return ONLY the following structured analysis.
 
 ### 🎯 Key Insight
 
-Provide the single most important answer to the user's question.
+Give the most important answer to the user's question.
 
-Be precise.
+If the question is about engagement, clearly identify the
+engagement leader based on the verified Likes, Comments,
+and Shares metrics.
 
-If the question involves ranking or performance, explicitly name the
-metric used.
+If Views tell a different story, mention the Reach Leader separately.
 
-Every factual statement must have a citation.
+Every factual claim must include a citation.
 
 ---
 
 ### 📊 Supporting Evidence
 
-List the strongest evidence supporting the key insight.
+List the strongest verified evidence.
 
 Use concise bullet points.
 
-Every factual bullet MUST include a source citation.
+Every factual bullet must include a citation.
 
-If numerical values are used, reproduce them accurately.
+Do not change any numerical value from the verified analytics.
 
 ---
 
 ### 🔥 Engagement Drivers
 
-Use this exact structure:
+Use:
 
 **Observed Pattern**
 
-Describe only what the retrieved data actually shows.
-
-Include citations.
+Describe what the data actually shows.
 
 **Possible Interpretation**
 
 Explain what the pattern MAY indicate.
 
-Clearly state that this is an interpretation, not a proven causal fact.
-
-Do not invent audience motivations.
+Do not present interpretations as proven facts.
 
 ---
 
 ### 💡 Content Opportunities
 
-Suggest 2 to 4 potential opportunities based on the evidence.
+Suggest 2 to 4 evidence-based opportunities.
 
 Clearly distinguish opportunities from proven facts.
-
-Each opportunity should explain why it is relevant to the observed data.
 
 ---
 
@@ -403,16 +917,7 @@ Each opportunity should explain why it is relevant to the observed data.
 
 Provide 3 to 5 practical actions.
 
-Prioritize actions such as:
-
-- validating the pattern with more data
-- analyzing high-performing content
-- comparing relevant metrics
-- testing content formats
-- monitoring performance
-- building a data-backed content calendar
-
-Avoid unsupported business recommendations.
+Prioritize validation, analysis, testing, and monitoring.
 
 ---
 
@@ -420,71 +925,73 @@ Avoid unsupported business recommendations.
 
 Choose exactly one:
 
-**HIGH SIGNAL**
+HIGH SIGNAL
 
-**MODERATE SIGNAL**
+MODERATE SIGNAL
 
-**LOW SIGNAL**
+LOW SIGNAL
 
-Then provide one concise sentence explaining why.
+Then explain the signal in one concise sentence.
 
 ---
 
 ### 🎯 Recommended Next Step
 
-Provide ONE specific next action that the marketer should take next.
-
-The next step must be directly connected to the evidence.
+Provide exactly ONE specific next action.
 
 ---
 
 ### ⚠️ Data Limitations
 
-List the most important limitations.
+Mention the most relevant limitations.
 
 Consider:
 
 - sample size
 - missing metrics
-- missing platform comparisons
 - missing audience data
+- missing platform comparisons
 - missing causal evidence
-- incomplete content information
-
-Do not invent limitations that are not relevant.
 
 ============================================================
 FINAL QUALITY CHECK
 ============================================================
 
-Before returning the answer, verify:
+Before returning the answer verify:
 
-1. Are all numerical comparisons correct?
+1. Numerical rankings match the VERIFIED ANALYTICS SUMMARY.
 
-2. Did I accidentally call the highest Views content the highest
-   engagement content?
+2. The highest Views content is correctly identified.
 
-3. Are all factual claims supported by citations?
+3. The highest Likes content is correctly identified.
 
-4. Did I distinguish Views from Likes, Comments, and Shares?
+4. The highest Comments content is correctly identified.
 
-5. Did I avoid unsupported causal claims?
+5. The highest Shares content is correctly identified.
 
-6. Did I avoid inventing statistics?
+6. Views are not incorrectly treated as engagement.
 
-7. Did I avoid claiming that a small sample represents the full dataset?
+7. No unsupported causal claims are made.
 
-8. Are recommendations based on actual evidence?
+8. Every factual claim has a source citation.
 
-9. Is the Decision Signal appropriate for the evidence quality?
+9. Exactly ONE Recommended Next Step is provided.
 
-10. Is there exactly ONE Recommended Next Step?
+============================================================
+VERIFIED ANALYTICS
+============================================================
 
-Retrieved Context:
+{analytics}
+
+============================================================
+RETRIEVED CONTEXT
+============================================================
 
 {context}
 
-User Question:
+============================================================
+USER QUESTION
+============================================================
 
 {question}
 
@@ -554,6 +1061,7 @@ def generate_answer(
                 "Please enter a marketing question."
             ),
             "sources": [],
+            "analytics": "",
         }
 
 
@@ -569,7 +1077,7 @@ def generate_answer(
 
 
     # --------------------------------------------------------
-    # HANDLE EMPTY RETRIEVAL
+    # EMPTY RETRIEVAL
     # --------------------------------------------------------
 
     if not docs:
@@ -581,11 +1089,12 @@ def generate_answer(
                 "this question reliably."
             ),
             "sources": [],
+            "analytics": "",
         }
 
 
     # --------------------------------------------------------
-    # FORMAT CONTEXT
+    # FORMAT RAW CONTEXT
     # --------------------------------------------------------
 
     context = format_context(
@@ -594,11 +1103,21 @@ def generate_answer(
 
 
     # --------------------------------------------------------
-    # BUILD RAG CHAIN
+    # CALCULATE VERIFIED ANALYTICS
+    # --------------------------------------------------------
+
+    analytics = build_verified_analytics(
+        docs
+    )
+
+
+    # --------------------------------------------------------
+    # BUILD RAG + ANALYTICS CHAIN
     # --------------------------------------------------------
 
     chain = (
         {
+            "analytics": lambda _: analytics,
             "context": lambda _: context,
             "question": RunnablePassthrough(),
         }
@@ -618,12 +1137,13 @@ def generate_answer(
 
 
     # --------------------------------------------------------
-    # RETURN STRUCTURED RESULT
+    # RETURN RESULT
     # --------------------------------------------------------
 
     return {
         "answer": answer,
         "sources": docs,
+        "analytics": analytics,
     }
 
 
@@ -648,19 +1168,61 @@ if __name__ == "__main__":
         k=5,
     )
 
+
     print(
-        f"Query: {query}\n"
+        "=" * 70
     )
 
     print(
-        "Answer:\n"
+        "MARKETPULSE AI"
     )
 
     print(
-        result["answer"]
+        "=" * 70
+    )
+
+
+    print(
+        f"\nQuery:\n{query}"
+    )
+
+
+    print(
+        "\n"
+        "VERIFIED ANALYTICS"
     )
 
     print(
-        "\nSources used: "
-        f"{len(result['sources'])}"
+        "-" * 70
+    )
+
+    print(
+        result.get(
+            "analytics",
+            ""
+        )
+    )
+
+
+    print(
+        "\n"
+        "AI ANALYSIS"
+    )
+
+    print(
+        "-" * 70
+    )
+
+    print(
+        result.get(
+            "answer",
+            ""
+        )
+    )
+
+
+    print(
+        "\n"
+        "Sources used: "
+        f"{len(result.get('sources', []))}"
     )
