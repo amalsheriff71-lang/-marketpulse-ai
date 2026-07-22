@@ -1,6 +1,7 @@
 """
 06_retrieve_context.py
 ----------------------
+
 Pipeline Stage 6: RETRIEVAL
 
 MarketPulse AI
@@ -159,10 +160,6 @@ def load_embeddings():
 )
 def download_chroma_store():
 
-    # --------------------------------------------------------
-    # Check if already downloaded
-    # --------------------------------------------------------
-
     sqlite_file = (
         LOCAL_CHROMA_DIR
         / "chroma.sqlite3"
@@ -173,10 +170,6 @@ def download_chroma_store():
         return str(
             LOCAL_CHROMA_DIR
         )
-
-    # --------------------------------------------------------
-    # Validate Hugging Face token
-    # --------------------------------------------------------
 
     hf_token = st.secrets.get(
         "HF_TOKEN",
@@ -189,10 +182,6 @@ def download_chroma_store():
             "HF_TOKEN is missing from "
             "Streamlit Secrets."
         )
-
-    # --------------------------------------------------------
-    # Import Hugging Face Hub
-    # --------------------------------------------------------
 
     try:
 
@@ -207,10 +196,6 @@ def download_chroma_store():
             "Install it with:\n"
             "pip install -U huggingface_hub"
         ) from error
-
-    # --------------------------------------------------------
-    # Download Dataset
-    # --------------------------------------------------------
 
     try:
 
@@ -231,10 +216,6 @@ def download_chroma_store():
             f"Technical details:\n{error}"
         ) from error
 
-    # --------------------------------------------------------
-    # Locate chroma_store
-    # --------------------------------------------------------
-
     downloaded_chroma = (
         Path(downloaded_path)
         / "chroma_store"
@@ -248,10 +229,6 @@ def download_chroma_store():
             f"Downloaded path:\n"
             f"{downloaded_path}"
         )
-
-    # --------------------------------------------------------
-    # Copy Chroma database locally
-    # --------------------------------------------------------
 
     try:
 
@@ -274,10 +251,6 @@ def download_chroma_store():
             f"Technical details: {error}"
         ) from error
 
-    # --------------------------------------------------------
-    # Validate database
-    # --------------------------------------------------------
-
     if not (
         LOCAL_CHROMA_DIR
         / "chroma.sqlite3"
@@ -297,27 +270,18 @@ def download_chroma_store():
 # LOAD VECTOR STORE
 # ============================================================
 
-def load_vectorstore():
-
-    # --------------------------------------------------------
-    # Download / locate Chroma
-    # --------------------------------------------------------
+def load_vectorstore(
+    *args,
+    **kwargs,
+):
 
     chroma_dir = (
         download_chroma_store()
     )
 
-    # --------------------------------------------------------
-    # Load embeddings
-    # --------------------------------------------------------
-
     embeddings = (
         load_embeddings()
     )
-
-    # --------------------------------------------------------
-    # Import Chroma
-    # --------------------------------------------------------
 
     try:
 
@@ -331,10 +295,6 @@ def load_vectorstore():
             "The langchain-chroma package "
             "is required."
         ) from error
-
-    # --------------------------------------------------------
-    # Open Chroma
-    # --------------------------------------------------------
 
     try:
 
@@ -532,4 +492,3 @@ def format_context(
     return "\n\n".join(
         chunks
     )
-
