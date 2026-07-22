@@ -18,6 +18,43 @@ from huggingface_hub import snapshot_download
 
 
 # ============================================================
+# HTML RENDER HELPER
+# ============================================================
+#
+# BUG FIX (root cause of raw "<div class=...>" text showing up
+# in the deployed app instead of rendered HTML/cards):
+#
+# Streamlit's st.markdown() runs content through a Markdown
+# parser *before* honoring unsafe_allow_html=True. Markdown's
+# spec treats any line indented by 4+ spaces (especially one
+# following a blank line) as the start of an "indented code
+# block", and renders it verbatim as literal code instead of
+# parsing it as HTML.
+#
+# Every HTML block in this file was written as an indented,
+# multi-line triple-quoted string (natural for readability), and
+# that indentation is exactly what triggered Markdown's
+# code-block rule -> the <div> markup was displayed as literal
+# text in a code box instead of being rendered as HTML.
+#
+# unsafe_allow_html=True was already set correctly everywhere;
+# it was never the actual problem. The fix is to strip leading
+# whitespace from every line of HTML right before handing it to
+# st.markdown(), so Markdown never sees a 4-space indent.
+#
+def render_html(html: str) -> None:
+    """
+    Render a block of raw HTML safely in Streamlit.
+
+    Strips per-line leading/trailing whitespace so Markdown's
+    "indented code block" rule never triggers, then renders the
+    HTML via st.markdown(unsafe_allow_html=True).
+    """
+    lines = [line.strip() for line in html.strip("\n").splitlines()]
+    st.markdown("\n".join(lines), unsafe_allow_html=True)
+
+
+# ============================================================
 # PAGE CONFIG
 # ============================================================
 
@@ -115,466 +152,465 @@ get_llm = prompting_module.get_llm
 # PREMIUM CSS
 # ============================================================
 
-st.markdown(
+render_html(
     """
     <style>
 
     .stApp {
-        background:
-            radial-gradient(
-                circle at 8% 0%,
-                rgba(99, 102, 241, 0.16),
-                transparent 28%
-            ),
-            radial-gradient(
-                circle at 92% 8%,
-                rgba(168, 85, 247, 0.12),
-                transparent 25%
-            ),
-            linear-gradient(
-                135deg,
-                #070b16 0%,
-                #0b1020 48%,
-                #10162a 100%
-            );
+    background:
+    radial-gradient(
+    circle at 8% 0%,
+    rgba(99, 102, 241, 0.16),
+    transparent 28%
+    ),
+    radial-gradient(
+    circle at 92% 8%,
+    rgba(168, 85, 247, 0.12),
+    transparent 25%
+    ),
+    linear-gradient(
+    135deg,
+    #070b16 0%,
+    #0b1020 48%,
+    #10162a 100%
+    );
 
-        color: #f8fafc;
+    color: #f8fafc;
     }
 
     header[data-testid="stHeader"] {
-        background: transparent;
+    background: transparent;
     }
 
     .main .block-container {
-        max-width: 1500px;
-        padding-top: 2rem;
-        padding-bottom: 4rem;
+    max-width: 1500px;
+    padding-top: 2rem;
+    padding-bottom: 4rem;
     }
 
     section[data-testid="stSidebar"] {
-        background:
-            linear-gradient(
-                180deg,
-                #080c18 0%,
-                #0d1324 100%
-            );
+    background:
+    linear-gradient(
+    180deg,
+    #080c18 0%,
+    #0d1324 100%
+    );
 
-        border-right:
-            1px solid
-            rgba(255,255,255,0.07);
+    border-right:
+    1px solid
+    rgba(255,255,255,0.07);
     }
 
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 {
-        color: #f8fafc;
+    color: #f8fafc;
     }
 
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] li {
-        color: #94a3b8;
+    color: #94a3b8;
     }
 
     h1,
     h2,
     h3,
     h4 {
-        letter-spacing: -0.025em;
+    letter-spacing: -0.025em;
     }
 
     h1 {
-        font-weight: 800 !important;
+    font-weight: 800 !important;
     }
 
     .hero-container {
-        padding: 3.2rem 3rem;
-        border-radius: 28px;
+    padding: 3.2rem 3rem;
+    border-radius: 28px;
 
-        background:
-            linear-gradient(
-                135deg,
-                rgba(30,41,59,0.94),
-                rgba(15,23,42,0.98)
-            );
+    background:
+    linear-gradient(
+    135deg,
+    rgba(30,41,59,0.94),
+    rgba(15,23,42,0.98)
+    );
 
-        border:
-            1px solid
-            rgba(148,163,184,0.14);
+    border:
+    1px solid
+    rgba(148,163,184,0.14);
 
-        box-shadow:
-            0 30px 80px
-            rgba(0,0,0,0.35);
+    box-shadow:
+    0 30px 80px
+    rgba(0,0,0,0.35);
 
-        margin-bottom: 2rem;
+    margin-bottom: 2rem;
     }
 
     .hero-badge-native {
-        display: inline-block;
-        padding: 0.45rem 0.9rem;
-        border-radius: 999px;
+    display: inline-block;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
 
-        background:
-            rgba(99,102,241,0.14);
+    background:
+    rgba(99,102,241,0.14);
 
-        border:
-            1px solid
-            rgba(129,140,248,0.28);
+    border:
+    1px solid
+    rgba(129,140,248,0.28);
 
-        color: #c7d2fe;
-        font-size: 0.78rem;
-        font-weight: 800;
-        letter-spacing: 0.04em;
-        margin-bottom: 1rem;
+    color: #c7d2fe;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    margin-bottom: 1rem;
     }
 
     .hero-title-native {
-        font-size: clamp(2rem, 4vw, 3.4rem);
-        line-height: 1.08;
-        font-weight: 850;
-        color: #ffffff;
-        margin-bottom: 1rem;
+    font-size: clamp(2rem, 4vw, 3.4rem);
+    line-height: 1.08;
+    font-weight: 850;
+    color: #ffffff;
+    margin-bottom: 1rem;
     }
 
     .hero-highlight {
-        background:
-            linear-gradient(
-                90deg,
-                #818cf8,
-                #c4b5fd
-            );
+    background:
+    linear-gradient(
+    90deg,
+    #818cf8,
+    #c4b5fd
+    );
 
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
     }
 
     .hero-subtitle-native {
-        font-size: 1.05rem;
-        line-height: 1.8;
-        color: #94a3b8;
-        max-width: 900px;
+    font-size: 1.05rem;
+    line-height: 1.8;
+    color: #94a3b8;
+    max-width: 900px;
     }
 
     .kpi-card-native {
-        padding: 1.35rem;
-        min-height: 135px;
-        border-radius: 20px;
+    padding: 1.35rem;
+    min-height: 135px;
+    border-radius: 20px;
 
-        background:
-            linear-gradient(
-                145deg,
-                rgba(30,41,59,0.82),
-                rgba(15,23,42,0.84)
-            );
+    background:
+    linear-gradient(
+    145deg,
+    rgba(30,41,59,0.82),
+    rgba(15,23,42,0.84)
+    );
 
-        border:
-            1px solid
-            rgba(148,163,184,0.13);
+    border:
+    1px solid
+    rgba(148,163,184,0.13);
 
-        box-shadow:
-            0 15px 40px
-            rgba(0,0,0,0.16);
+    box-shadow:
+    0 15px 40px
+    rgba(0,0,0,0.16);
 
-        transition:
-            transform 0.2s ease,
-            box-shadow 0.2s ease,
-            border-color 0.2s ease;
+    transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
     }
 
     .kpi-card-native:hover {
-        transform: translateY(-4px);
+    transform: translateY(-4px);
 
-        border-color:
-            rgba(129,140,248,0.45);
+    border-color:
+    rgba(129,140,248,0.45);
 
-        box-shadow:
-            0 20px 50px
-            rgba(99,102,241,0.18);
+    box-shadow:
+    0 20px 50px
+    rgba(99,102,241,0.18);
     }
 
     .kpi-icon-native {
-        font-size: 1.5rem;
-        margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
     }
 
     .kpi-title-native {
-        color: #94a3b8;
-        font-size: 0.75rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
     }
 
     .kpi-text-native {
-        color: #f8fafc;
-        font-size: 1rem;
-        font-weight: 700;
-        margin-top: 0.35rem;
+    color: #f8fafc;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-top: 0.35rem;
     }
 
     .section-eyebrow-native {
-        color: #818cf8;
-        font-size: 0.72rem;
-        font-weight: 850;
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
-        margin-top: 1.8rem;
-        margin-bottom: 0.35rem;
+    color: #818cf8;
+    font-size: 0.72rem;
+    font-weight: 850;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    margin-top: 1.8rem;
+    margin-bottom: 0.35rem;
     }
 
     .explore-card-native {
-        min-height: 195px;
-        padding: 1.25rem;
-        border-radius: 20px;
+    min-height: 195px;
+    padding: 1.25rem;
+    border-radius: 20px;
 
-        background:
-            linear-gradient(
-                145deg,
-                rgba(30,41,59,0.82),
-                rgba(15,23,42,0.82)
-            );
+    background:
+    linear-gradient(
+    145deg,
+    rgba(30,41,59,0.82),
+    rgba(15,23,42,0.82)
+    );
 
-        border:
-            1px solid
-            rgba(148,163,184,0.12);
+    border:
+    1px solid
+    rgba(148,163,184,0.12);
 
-        box-shadow:
-            0 15px 40px
-            rgba(0,0,0,0.14);
+    box-shadow:
+    0 15px 40px
+    rgba(0,0,0,0.14);
 
-        transition:
-            transform 0.2s ease,
-            box-shadow 0.2s ease,
-            border-color 0.2s ease;
+    transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
     }
 
     .explore-card-native:hover {
-        transform: translateY(-4px);
+    transform: translateY(-4px);
 
-        border-color:
-            rgba(168,85,247,0.45);
+    border-color:
+    rgba(168,85,247,0.45);
 
-        box-shadow:
-            0 20px 50px
-            rgba(168,85,247,0.18);
+    box-shadow:
+    0 20px 50px
+    rgba(168,85,247,0.18);
     }
 
     .explore-icon-native {
-        font-size: 2rem;
-        margin-bottom: 0.65rem;
+    font-size: 2rem;
+    margin-bottom: 0.65rem;
     }
 
     .explore-title-native {
-        color: #f8fafc;
-        font-size: 0.98rem;
-        font-weight: 800;
-        margin-bottom: 0.45rem;
+    color: #f8fafc;
+    font-size: 0.98rem;
+    font-weight: 800;
+    margin-bottom: 0.45rem;
     }
 
     .explore-description-native {
-        color: #94a3b8;
-        font-size: 0.80rem;
-        line-height: 1.6;
+    color: #94a3b8;
+    font-size: 0.80rem;
+    line-height: 1.6;
     }
 
     .stButton > button {
-        min-height: 44px;
-        border-radius: 12px;
-        font-weight: 700;
+    min-height: 44px;
+    border-radius: 12px;
+    font-weight: 700;
 
-        border:
-            1px solid
-            rgba(148,163,184,0.18);
+    border:
+    1px solid
+    rgba(148,163,184,0.18);
 
-        background:
-            rgba(30,41,59,0.72);
+    background:
+    rgba(30,41,59,0.72);
 
-        color: #f8fafc;
+    color: #f8fafc;
 
-        transition: all 0.2s ease;
+    transition: all 0.2s ease;
     }
 
     .stButton > button:hover {
-        transform: translateY(-2px);
+    transform: translateY(-2px);
 
-        border-color:
-            rgba(129,140,248,0.55);
+    border-color:
+    rgba(129,140,248,0.55);
 
-        background:
-            rgba(51,65,85,0.92);
+    background:
+    rgba(51,65,85,0.92);
     }
 
     button[kind="primary"] {
-        background:
-            linear-gradient(
-                135deg,
-                #6366f1,
-                #8b5cf6
-            ) !important;
+    background:
+    linear-gradient(
+    135deg,
+    #6366f1,
+    #8b5cf6
+    ) !important;
 
-        border: none !important;
-        color: white !important;
+    border: none !important;
+    color: white !important;
 
-        box-shadow:
-            0 12px 30px
-            rgba(99,102,241,0.25);
+    box-shadow:
+    0 12px 30px
+    rgba(99,102,241,0.25);
     }
 
     button[kind="primary"]:hover {
-        background:
-            linear-gradient(
-                135deg,
-                #818cf8,
-                #a78bfa
-            ) !important;
+    background:
+    linear-gradient(
+    135deg,
+    #818cf8,
+    #a78bfa
+    ) !important;
 
-        box-shadow:
-            0 15px 35px
-            rgba(99,102,241,0.35);
+    box-shadow:
+    0 15px 35px
+    rgba(99,102,241,0.35);
     }
 
     textarea {
-        border-radius: 18px !important;
+    border-radius: 18px !important;
 
-        background:
-            rgba(15,23,42,0.88) !important;
+    background:
+    rgba(15,23,42,0.88) !important;
 
-        color: #f8fafc !important;
+    color: #f8fafc !important;
 
-        border:
-            1px solid
-            rgba(148,163,184,0.16) !important;
+    border:
+    1px solid
+    rgba(148,163,184,0.16) !important;
     }
 
     textarea:focus {
-        border:
-            1px solid
-            rgba(129,140,248,0.7) !important;
+    border:
+    1px solid
+    rgba(129,140,248,0.7) !important;
 
-        box-shadow:
-            0 0 0 1px
-            rgba(129,140,248,0.25) !important;
+    box-shadow:
+    0 0 0 1px
+    rgba(129,140,248,0.25) !important;
     }
 
     .result-header-native {
-        padding: 1.5rem 1.7rem;
-        border-radius: 20px;
+    padding: 1.5rem 1.7rem;
+    border-radius: 20px;
 
-        background:
-            linear-gradient(
-                135deg,
-                rgba(30,41,59,0.84),
-                rgba(15,23,42,0.86)
-            );
+    background:
+    linear-gradient(
+    135deg,
+    rgba(30,41,59,0.84),
+    rgba(15,23,42,0.86)
+    );
 
-        border:
-            1px solid
-            rgba(129,140,248,0.18);
+    border:
+    1px solid
+    rgba(129,140,248,0.18);
 
-        margin-bottom: 1rem;
+    margin-bottom: 1rem;
     }
 
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 0.4rem;
-        border-radius: 22px !important;
+    padding: 0.4rem;
+    border-radius: 22px !important;
 
-        background:
-            rgba(15,23,42,0.84);
+    background:
+    rgba(15,23,42,0.84);
 
-        border:
-            1px solid
-            rgba(148,163,184,0.13) !important;
+    border:
+    1px solid
+    rgba(148,163,184,0.13) !important;
 
-        box-shadow:
-            0 20px 55px
-            rgba(0,0,0,0.18);
+    box-shadow:
+    0 20px 55px
+    rgba(0,0,0,0.18);
     }
 
     .insight-label-native {
-        color: #a5b4fc;
-        font-size: 0.75rem;
-        font-weight: 850;
-        text-transform: uppercase;
-        letter-spacing: 0.10em;
-        margin-bottom: 0.8rem;
+    color: #a5b4fc;
+    font-size: 0.75rem;
+    font-weight: 850;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    margin-bottom: 0.8rem;
     }
 
     .action-card-native {
-        padding: 1.25rem;
-        border-radius: 16px;
+    padding: 1.25rem;
+    border-radius: 16px;
 
-        background:
-            rgba(30,41,59,0.68);
+    background:
+    rgba(30,41,59,0.68);
 
-        border:
-            1px solid
-            rgba(148,163,184,0.10);
+    border:
+    1px solid
+    rgba(148,163,184,0.10);
 
-        margin-top: 1rem;
+    margin-top: 1rem;
     }
 
     .empty-state-native {
-        padding: 3rem;
-        text-align: center;
-        border-radius: 24px;
+    padding: 3rem;
+    text-align: center;
+    border-radius: 24px;
 
-        background:
-            rgba(15,23,42,0.55);
+    background:
+    rgba(15,23,42,0.55);
 
-        border:
-            1px dashed
-            rgba(148,163,184,0.20);
+    border:
+    1px dashed
+    rgba(148,163,184,0.20);
 
-        margin-top: 1.5rem;
+    margin-top: 1.5rem;
     }
 
     .empty-icon-native {
-        font-size: 3rem;
-        margin-bottom: 0.8rem;
+    font-size: 3rem;
+    margin-bottom: 0.8rem;
     }
 
     .empty-title-native {
-        font-size: 1.2rem;
-        font-weight: 800;
-        color: #f8fafc;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #f8fafc;
     }
 
     .empty-description-native {
-        color: #94a3b8;
-        max-width: 650px;
-        margin: 0.5rem auto 0;
+    color: #94a3b8;
+    max-width: 650px;
+    margin: 0.5rem auto 0;
     }
 
     .footer-native {
-        text-align: center;
-        color: #64748b;
-        font-size: 0.78rem;
-        padding-top: 3rem;
-        margin-top: 4rem;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.78rem;
+    padding-top: 3rem;
+    margin-top: 4rem;
 
-        border-top:
-            1px solid
-            rgba(148,163,184,0.08);
+    border-top:
+    1px solid
+    rgba(148,163,184,0.08);
     }
 
     @media (max-width: 768px) {
 
-        .hero-container {
-            padding: 2rem 1.4rem;
-        }
+    .hero-container {
+    padding: 2rem 1.4rem;
+    }
 
-        .hero-title-native {
-            font-size: 2rem;
-        }
+    .hero-title-native {
+    font-size: 2rem;
+    }
 
-        .kpi-card-native {
-            min-height: 110px;
-        }
+    .kpi-card-native {
+    min-height: 110px;
+    }
 
     }
 
     </style>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 
@@ -690,32 +726,31 @@ with st.sidebar:
 # HERO
 # ============================================================
 
-st.markdown(
+render_html(
     """
     <div class="hero-container">
 
-        <div class="hero-badge-native">
-            ✨ AI-POWERED MARKETING INTELLIGENCE
-        </div>
+    <div class="hero-badge-native">
+    ✨ AI-POWERED MARKETING INTELLIGENCE
+    </div>
 
-        <div class="hero-title-native">
-            Turn Social Media Data<br>
+    <div class="hero-title-native">
+    Turn Social Media Data<br>
 
-            <span class="hero-highlight">
-                Into Your Next Marketing Move.
-            </span>
-        </div>
+    <span class="hero-highlight">
+    Into Your Next Marketing Move.
+    </span>
+    </div>
 
-        <div class="hero-subtitle-native">
-            MarketPulse AI transforms your marketing knowledge base
-            into actionable intelligence. Discover what drives engagement,
-            understand audience behavior, identify content opportunities,
-            and make smarter decisions — grounded in your own data.
-        </div>
+    <div class="hero-subtitle-native">
+    MarketPulse AI transforms your marketing knowledge base
+    into actionable intelligence. Discover what drives engagement,
+    understand audience behavior, identify content opportunities,
+    and make smarter decisions — grounded in your own data.
+    </div>
 
     </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 
@@ -761,25 +796,24 @@ for col, item in zip(
 
     with col:
 
-        st.markdown(
+        render_html(
             f"""
             <div class="kpi-card-native">
 
-                <div class="kpi-icon-native">
-                    {item[0]}
-                </div>
+            <div class="kpi-icon-native">
+            {item[0]}
+            </div>
 
-                <div class="kpi-title-native">
-                    {item[1]}
-                </div>
+            <div class="kpi-title-native">
+            {item[1]}
+            </div>
 
-                <div class="kpi-text-native">
-                    {item[2]}
-                </div>
+            <div class="kpi-text-native">
+            {item[2]}
+            </div>
 
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
 
@@ -862,25 +896,24 @@ for i, item in enumerate(
 
     with columns[i]:
 
-        st.markdown(
+        render_html(
             f"""
             <div class="explore-card-native">
 
-                <div class="explore-icon-native">
-                    {icon}
-                </div>
+            <div class="explore-icon-native">
+            {icon}
+            </div>
 
-                <div class="explore-title-native">
-                    {title}
-                </div>
+            <div class="explore-title-native">
+            {title}
+            </div>
 
-                <div class="explore-description-native">
-                    {description}
-                </div>
+            <div class="explore-description-native">
+            {description}
+            </div>
 
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
         st.markdown("")
@@ -1237,34 +1270,34 @@ if (
         st.divider()
 
 
-        st.markdown(
+        render_html(
             """
             <div class="result-header-native">
 
-                <div class="section-eyebrow-native">
-                    ANALYSIS COMPLETE
-                </div>
+            <div class="section-eyebrow-native">
+            ANALYSIS COMPLETE
+            </div>
 
-                <h2>
-                    🎯 Your Marketing Intelligence
-                </h2>
+            <h2>
+            🎯 Your Marketing Intelligence
+            </h2>
 
-                <p style="color:#94a3b8;">
-                    AI-generated insights grounded in the
-                    relevant data retrieved from your knowledge base.
-                </p>
+            <p style="color:#94a3b8;">
+            AI-generated insights grounded in the
+            relevant data retrieved from your knowledge base.
+            </p>
 
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
 
-        st.markdown(
-            '<div class="insight-label-native">'
+        render_html(
+            """
+            iv class="insight-label-native">'
             '🧠 AI Marketing Analysis'
-            '</div>',
-            unsafe_allow_html=True,
+            '</di
+            """
         )
 
 
@@ -1283,34 +1316,34 @@ if (
                 )
 
 
-        st.markdown(
+        render_html(
             """
             <div class="action-card-native">
 
-                <strong>
-                    🚀 Recommended Next Step
-                </strong>
+            <strong>
+            🚀 Recommended Next Step
+            </strong>
 
-                <br><br>
+            <br><br>
 
-                Use the analysis above as a decision-making
-                starting point, then validate the strongest
-                patterns against the supporting evidence below.
+            Use the analysis above as a decision-making
+            starting point, then validate the strongest
+            patterns against the supporting evidence below.
 
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
 
         st.markdown("")
 
 
-        st.markdown(
-            '<div class="section-eyebrow-native">'
+        render_html(
+            """
+            iv class="section-eyebrow-native">'
             'EVIDENCE LAYER'
-            '</div>',
-            unsafe_allow_html=True,
+            '</di
+            """
         )
 
 
@@ -1440,27 +1473,26 @@ if (
 
 if not st.session_state.analysis_complete:
 
-    st.markdown(
+    render_html(
         """
         <div class="empty-state-native">
 
-            <div class="empty-icon-native">
-                🧠
-            </div>
+        <div class="empty-icon-native">
+        🧠
+        </div>
 
-            <div class="empty-title-native">
-                Your Marketing Intelligence Starts Here
-            </div>
+        <div class="empty-title-native">
+        Your Marketing Intelligence Starts Here
+        </div>
 
-            <div class="empty-description-native">
-                Choose an insight above or ask your own question.
-                MarketPulse AI will retrieve relevant evidence,
-                analyze it with AI, and surface actionable insights.
-            </div>
+        <div class="empty-description-native">
+        Choose an insight above or ask your own question.
+        MarketPulse AI will retrieve relevant evidence,
+        analyze it with AI, and surface actionable insights.
+        </div>
 
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
@@ -1468,17 +1500,16 @@ if not st.session_state.analysis_complete:
 # FOOTER
 # ============================================================
 
-st.markdown(
+render_html(
     """
     <div class="footer-native">
 
-        MarketPulse AI · AI-powered Marketing Intelligence
+    MarketPulse AI · AI-powered Marketing Intelligence
 
-        <br>
+    <br>
 
-        Retrieval-Augmented Generation · Chroma · Groq
+    Retrieval-Augmented Generation · Chroma · Groq
 
     </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
