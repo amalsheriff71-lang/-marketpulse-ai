@@ -9,3 +9,4 @@ langchain-groq
 chromadb==0.5.5
 sentence-transformers==3.2.1
 protobuf<6
+huggingface-hub
