@@ -1,4 +1,3 @@
-```python
 """
 06_retrieve_context.py
 ----------------------
@@ -533,4 +532,4 @@ def format_context(
     return "\n\n".join(
         chunks
     )
-```
+
