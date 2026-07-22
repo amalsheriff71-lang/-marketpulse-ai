@@ -1,0 +1,10 @@
+.env
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+chroma_store/
+data/
+chroma_store/
+data/
