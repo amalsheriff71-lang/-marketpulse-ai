@@ -1,32 +1,24 @@
 """
 06_retrieve_context.py
-------------------------
-Pipeline stage 6: CONTEXT RETRIEVAL + ANALYTICS
+----------------------
+Pipeline Stage 6: RETRIEVAL
 
 MarketPulse AI
+AI-powered Marketing Intelligence
+
+Production V6
 
 Responsibilities:
-1. Load the persisted Chroma vector store.
-2. Retrieve the most relevant documents.
-3. Extract structured marketing metrics from retrieved documents.
-4. Calculate engagement scores using Python.
-5. Rank content objectively before sending data to the LLM.
-6. Provide a structured analytical context for the LLM.
-7. Keep source numbering consistent between LLM and Streamlit UI.
-
-IMPORTANT:
-The LLM should interpret the calculated evidence.
-Python is responsible for deterministic calculations and rankings.
+- Load the Chroma vector store safely.
+- Retrieve relevant documents.
+- Keep metadata available for analytics and UI.
+- Work locally on Windows.
+- Work on Streamlit Cloud.
+- Use the modern langchain-chroma integration.
 """
-
 
 import importlib.util
 import os
-import re
-from typing import Any, Dict, List, Optional
-
-from langchain_community.vectorstores import Chroma
-from langchain_core.documents import Document
 
 
 # ============================================================
@@ -39,107 +31,205 @@ BASE_DIR = os.path.dirname(
 
 
 # ============================================================
-# DYNAMIC IMPORT HELPER
+# CONFIGURATION
 # ============================================================
 
-def _import(
-    module_filename: str,
-    module_name: str,
-):
+CHROMA_DIR = os.path.join(
+    BASE_DIR,
+    "chroma_store",
+)
+
+COLLECTION_NAME = "marketpulse"
+
+
+# ============================================================
+# LOAD EMBEDDINGS
+# ============================================================
+
+def load_embeddings():
     """
-    Dynamically import a Python module from the same directory.
+    Load the same embedding model used
+    when creating the Chroma database.
     """
 
-    module_path = os.path.join(
+    vector_module_path = os.path.join(
         BASE_DIR,
-        module_filename,
+        "04_vector_representation.py",
     )
 
     spec = importlib.util.spec_from_file_location(
-        module_name,
-        module_path,
+        "vector_representation_mod",
+        vector_module_path,
     )
 
     if spec is None or spec.loader is None:
         raise ImportError(
-            f"Could not load module: {module_filename}"
+            "Could not load 04_vector_representation.py"
         )
 
-    mod = importlib.util.module_from_spec(
+    module = importlib.util.module_from_spec(
         spec
     )
 
     spec.loader.exec_module(
-        mod
+        module
     )
 
-    return mod
+    # Try common function names
+    if hasattr(
+        module,
+        "get_embedding_function",
+    ):
+        return module.get_embedding_function()
 
+    if hasattr(
+        module,
+        "get_embeddings",
+    ):
+        return module.get_embeddings()
 
-# ============================================================
-# LOAD VECTOR / STORE MODULES
-# ============================================================
+    if hasattr(
+        module,
+        "load_embeddings",
+    ):
+        return module.load_embeddings()
 
-_vectors = _import(
-    "04_vector_representation.py",
-    "vectors_mod",
-)
+    if hasattr(
+        module,
+        "create_embeddings",
+    ):
+        return module.create_embeddings()
 
-_store = _import(
-    "05_create_chroma_store.py",
-    "store_mod",
-)
+    # Try common embedding constants
+    model_name = getattr(
+        module,
+        "EMBEDDING_MODEL_NAME",
+        None,
+    )
 
+    if model_name:
 
-# ============================================================
-# IMPORT REQUIRED FUNCTIONS / CONSTANTS
-# ============================================================
+        try:
 
-get_embedding_function = (
-    _vectors.get_embedding_function
-)
+            from langchain_huggingface import (
+                HuggingFaceEmbeddings,
+            )
 
-PERSIST_DIRECTORY = (
-    _store.PERSIST_DIRECTORY
-)
+            return HuggingFaceEmbeddings(
+                model_name=model_name
+            )
 
-COLLECTION_NAME = (
-    _store.COLLECTION_NAME
-)
+        except Exception as error:
 
-store_exists = (
-    _store.store_exists
-)
+            raise RuntimeError(
+                "Could not initialize HuggingFace embeddings.\n"
+                f"Technical details: {error}"
+            )
+
+    raise AttributeError(
+        "No compatible embedding loader was found "
+        "in 04_vector_representation.py."
+    )
 
 
 # ============================================================
 # LOAD VECTOR STORE
 # ============================================================
 
-def load_vectorstore(
-    persist_directory: str = PERSIST_DIRECTORY,
-) -> Chroma:
+def load_vectorstore():
     """
-    Load the persisted Chroma vector store.
+    Load the existing Chroma vector store.
 
-    The embedding function must match the embedding
-    function used when the store was created.
+    Uses the modern langchain-chroma package.
     """
 
-    if not store_exists(
-        persist_directory
+    # --------------------------------------------------------
+    # Validate Chroma directory
+    # --------------------------------------------------------
+
+    if not os.path.exists(
+        CHROMA_DIR
     ):
+
         raise FileNotFoundError(
-            f"No Chroma store found at "
-            f"'{persist_directory}'. "
-            f"Run `python 05_create_chroma_store.py` first."
+            "Chroma vector store directory was not found:\n"
+            f"{CHROMA_DIR}"
         )
 
-    return Chroma(
-        persist_directory=persist_directory,
-        embedding_function=get_embedding_function(),
-        collection_name=COLLECTION_NAME,
-    )
+    # --------------------------------------------------------
+    # Check directory contents
+    # --------------------------------------------------------
+
+    if not os.listdir(
+        CHROMA_DIR
+    ):
+
+        raise RuntimeError(
+            "The Chroma vector store directory is empty:\n"
+            f"{CHROMA_DIR}"
+        )
+
+    # --------------------------------------------------------
+    # Load embeddings
+    # --------------------------------------------------------
+
+    embeddings = load_embeddings()
+
+    # --------------------------------------------------------
+    # Import modern Chroma integration
+    # --------------------------------------------------------
+
+    try:
+
+        from langchain_chroma import Chroma
+
+    except ImportError as error:
+
+        raise ImportError(
+            "The langchain-chroma package is required.\n"
+            "Install it with:\n"
+            "pip install -U langchain-chroma"
+        ) from error
+
+    # --------------------------------------------------------
+    # Try collection name
+    # --------------------------------------------------------
+
+    try:
+
+        vectorstore = Chroma(
+            collection_name=COLLECTION_NAME,
+            embedding_function=embeddings,
+            persist_directory=CHROMA_DIR,
+        )
+
+        # ----------------------------------------------------
+        # Validate collection
+        # ----------------------------------------------------
+
+        collection = (
+            vectorstore._collection
+        )
+
+        count = collection.count()
+
+        if count == 0:
+
+            raise RuntimeError(
+                "The Chroma collection exists but contains "
+                "zero documents."
+            )
+
+        return vectorstore
+
+    except Exception as error:
+
+        raise RuntimeError(
+            "Failed to load the Chroma vector store.\n\n"
+            f"Directory:\n{CHROMA_DIR}\n\n"
+            f"Collection:\n{COLLECTION_NAME}\n\n"
+            f"Technical details:\n{error}"
+        ) from error
 
 
 # ============================================================
@@ -147,716 +237,255 @@ def load_vectorstore(
 # ============================================================
 
 def retrieve_context(
-    vectorstore: Chroma,
-    query: str,
-    k: int = 5,
-) -> List[Document]:
+    vectorstore,
+    query,
+    k=5,
+):
     """
-    Retrieve the top-k most relevant documents.
+    Retrieve the most relevant documents.
     """
+
+    if vectorstore is None:
+
+        raise ValueError(
+            "Vector store is not loaded."
+        )
 
     if not query or not query.strip():
+
         return []
 
-    retriever = vectorstore.as_retriever(
-        search_kwargs={
-            "k": k
-        }
-    )
-
-    return retriever.invoke(
-        query
-    )
-
-
-# ============================================================
-# SAFE NUMBER PARSER
-# ============================================================
-
-def _to_number(
-    value: Any,
-) -> Optional[float]:
-    """
-    Convert a value into a number safely.
-
-    Supports values such as:
-    - 1551
-    - "1551"
-    - "1,551"
-    - "1551 Likes"
-    """
-
-    if value is None:
-        return None
-
-    if isinstance(
-        value,
-        (int, float),
-    ):
-        return float(value)
-
-    text = str(
-        value
-    ).replace(
-        ",",
-        "",
-    )
-
-    match = re.search(
-        r"-?\d+(?:\.\d+)?",
-        text,
-    )
-
-    if not match:
-        return None
-
     try:
-        return float(
-            match.group(0)
-        )
-    except (
-        ValueError,
-        TypeError,
-    ):
-        return None
 
-
-# ============================================================
-# EXTRACT METRIC FROM TEXT
-# ============================================================
-
-def _extract_metric(
-    text: str,
-    metric_name: str,
-) -> Optional[float]:
-    """
-    Extract a metric from document text.
-
-    Example:
-    Engagement: 1551 Likes, 199 Comments,
-    310 Shares, 10106 Views
-    """
-
-    if not text:
-        return None
-
-    pattern = (
-        rf"{metric_name}"
-        rf"\s*[:=]?\s*"
-        rf"([\d,]+(?:\.\d+)?)"
-    )
-
-    match = re.search(
-        pattern,
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    if not match:
-        return None
-
-    return _to_number(
-        match.group(1)
-    )
-
-
-# ============================================================
-# EXTRACT METADATA
-# ============================================================
-
-def _get_metadata_value(
-    metadata: Dict[str, Any],
-    key: str,
-    default: str = "Unknown",
-) -> str:
-    """
-    Safely retrieve metadata.
-    """
-
-    value = metadata.get(
-        key
-    )
-
-    if value is None:
-        return default
-
-    return str(
-        value
-    )
-
-
-# ============================================================
-# ANALYZE DOCUMENT
-# ============================================================
-
-def analyze_document(
-    doc: Document,
-    source_number: int,
-) -> Dict[str, Any]:
-    """
-    Convert a retrieved Document into structured analytics.
-
-    Engagement Score is calculated deterministically:
-
-        Engagement Score =
-            Likes
-            + Comments
-            + Shares
-
-    Views are intentionally NOT included in the score.
-
-    This prevents the LLM from deciding rankings itself.
-    """
-
-    metadata = (
-        doc.metadata or {}
-    )
-
-    content = (
-        doc.page_content or ""
-    )
-
-    platform = _get_metadata_value(
-        metadata,
-        "platform",
-    )
-
-    category = _get_metadata_value(
-        metadata,
-        "category",
-    )
-
-    content_id = _get_metadata_value(
-        metadata,
-        "content_id",
-    )
-
-    likes = _extract_metric(
-        content,
-        "Likes",
-    )
-
-    comments = _extract_metric(
-        content,
-        "Comments",
-    )
-
-    shares = _extract_metric(
-        content,
-        "Shares",
-    )
-
-    views = _extract_metric(
-        content,
-        "Views",
-    )
-
-    followers = _extract_metric(
-        content,
-        "Followers",
-    )
-
-    sponsored = "Unknown"
-
-    sponsored_match = re.search(
-        r"Status\s*:\s*(.*?)(?:Followers|Top Comment|$)",
-        content,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-
-    if sponsored_match:
-        sponsored = (
-            sponsored_match.group(1)
-            .strip()
-            .replace(
-                "\n",
-                " ",
-            )
+        docs = vectorstore.similarity_search(
+            query.strip(),
+            k=k,
         )
 
-    # --------------------------------------------------------
-    # CALCULATE ENGAGEMENT SCORE
-    # --------------------------------------------------------
+        return docs
 
-    metric_values = [
-        value
-        for value in [
-            likes,
-            comments,
-            shares,
-        ]
-        if value is not None
-    ]
+    except Exception as error:
 
-    engagement_score = (
-        sum(
-            metric_values
+        raise RuntimeError(
+            "Failed to retrieve documents from "
+            "the Chroma vector store.\n"
+            f"Technical details: {error}"
+        ) from error
+
+
+# ============================================================
+# FORMAT CONTEXT
+# ============================================================
+
+def format_context(
+    docs,
+):
+    """
+    Format retrieved documents for display
+    or legacy pipeline compatibility.
+    """
+
+    if not docs:
+
+        return (
+            "No relevant documents were found."
         )
-        if metric_values
-        else None
-    )
 
-    return {
-        "source_number": source_number,
-        "source_label": (
-            f"[Source {source_number}]"
-        ),
-        "platform": platform,
-        "category": category,
-        "content_id": content_id,
-        "likes": likes,
-        "comments": comments,
-        "shares": shares,
-        "views": views,
-        "followers": followers,
-        "sponsored_status": sponsored,
-        "engagement_score": engagement_score,
-        "original_content": content,
-    }
-
-
-# ============================================================
-# ANALYZE RETRIEVED DOCUMENTS
-# ============================================================
-
-def analyze_retrieved_documents(
-    docs: List[Document],
-) -> List[Dict[str, Any]]:
-    """
-    Analyze all retrieved documents.
-
-    Returns structured records containing:
-    - Source
-    - Platform
-    - Category
-    - Content ID
-    - Likes
-    - Comments
-    - Shares
-    - Views
-    - Followers
-    - Engagement Score
-    """
-
-    analyzed = []
+    chunks = []
 
     for index, doc in enumerate(
         docs,
         start=1,
     ):
-        record = analyze_document(
+
+        # ----------------------------------------------------
+        # Content
+        # ----------------------------------------------------
+
+        if hasattr(
             doc,
-            index,
-        )
+            "page_content",
+        ):
 
-        analyzed.append(
-            record
-        )
-
-    return analyzed
-
-
-# ============================================================
-# RANK BY ENGAGEMENT
-# ============================================================
-
-def rank_by_engagement(
-    analyzed_docs: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    """
-    Rank content by deterministic Engagement Score.
-
-    Engagement Score =
-        Likes + Comments + Shares
-
-    Items without a calculable score
-    are placed at the bottom.
-    """
-
-    return sorted(
-        analyzed_docs,
-        key=lambda item: (
-            item.get(
-                "engagement_score"
+            content = (
+                doc.page_content
             )
-            if item.get(
-                "engagement_score"
-            ) is not None
-            else -1
-        ),
-        reverse=True,
-    )
 
+        elif isinstance(
+            doc,
+            dict,
+        ):
 
-# ============================================================
-# FIND TOP CONTENT
-# ============================================================
-
-def get_top_content(
-    analyzed_docs: List[Dict[str, Any]],
-) -> Optional[Dict[str, Any]]:
-    """
-    Return the highest-ranked content
-    based on Engagement Score.
-    """
-
-    ranked = rank_by_engagement(
-        analyzed_docs
-    )
-
-    if not ranked:
-        return None
-
-    valid_items = [
-        item
-        for item in ranked
-        if item.get(
-            "engagement_score"
-        ) is not None
-    ]
-
-    if not valid_items:
-        return None
-
-    return valid_items[0]
-
-
-# ============================================================
-# FORMAT ANALYTICS FOR LLM
-# ============================================================
-
-def format_analytics(
-    analyzed_docs: List[Dict[str, Any]],
-) -> str:
-    """
-    Format deterministic Python analytics
-    into a compact context for the LLM.
-
-    IMPORTANT:
-    The LLM receives the calculated ranking
-    and should interpret it rather than recalculate it.
-    """
-
-    if not analyzed_docs:
-        return (
-            "No structured analytics were available."
-        )
-
-    ranked = rank_by_engagement(
-        analyzed_docs
-    )
-
-    parts = []
-
-    parts.append(
-        "PYTHON-CALCULATED ANALYTICS\n"
-    )
-
-    parts.append(
-        "Engagement Score Formula:\n"
-        "Likes + Comments + Shares\n"
-    )
-
-    parts.append(
-        "Ranking is calculated by Python. "
-        "The LLM must not recalculate or invent rankings.\n"
-    )
-
-    parts.append(
-        "RANKED CONTENT:\n"
-    )
-
-    for rank, item in enumerate(
-        ranked,
-        start=1,
-    ):
-
-        engagement_score = (
-            item.get(
-                "engagement_score"
-            )
-        )
-
-        score_text = (
-            str(
-                int(
-                    engagement_score
+            content = (
+                doc.get(
+                    "page_content"
                 )
+                or doc.get(
+                    "content"
+                )
+                or doc.get(
+                    "text"
+                )
+                or ""
             )
-            if engagement_score is not None
-            else "Not Available"
+
+        else:
+
+            content = str(
+                doc
+            )
+
+        # ----------------------------------------------------
+        # Metadata
+        # ----------------------------------------------------
+
+        metadata = {}
+
+        if hasattr(
+            doc,
+            "metadata",
+        ):
+
+            metadata = doc.metadata
+
+        elif isinstance(
+            doc,
+            dict,
+        ):
+
+            metadata = doc.get(
+                "metadata",
+                {},
+            )
+
+        if not isinstance(
+            metadata,
+            dict,
+        ):
+
+            metadata = {}
+
+        platform = metadata.get(
+            "platform",
+            "",
         )
 
-        likes = item.get(
-            "likes"
+        category = metadata.get(
+            "category",
+            "",
         )
 
-        comments = item.get(
-            "comments"
+        content_id = (
+            metadata.get(
+                "content_id"
+            )
+            or metadata.get(
+                "id"
+            )
+            or ""
         )
 
-        shares = item.get(
-            "shares"
+        chunks.append(
+            f"[Source {index}]\n"
+            f"Content ID: {content_id}\n"
+            f"Platform: {platform}\n"
+            f"Category: {category}\n"
+            f"Content: {content}"
         )
 
-        views = item.get(
-            "views"
-        )
-
-        followers = item.get(
-            "followers"
-        )
-
-        parts.append(
-            f"""
-Rank: {rank}
-Source: {item.get("source_label")}
-Content ID: {item.get("content_id")}
-Platform: {item.get("platform")}
-Category: {item.get("category")}
-Likes: {likes if likes is not None else "N/A"}
-Comments: {comments if comments is not None else "N/A"}
-Shares: {shares if shares is not None else "N/A"}
-Views: {views if views is not None else "N/A"}
-Followers: {followers if followers is not None else "N/A"}
-Engagement Score: {score_text}
-Sponsored Status: {item.get("sponsored_status")}
-"""
-        )
-
-    top_content = get_top_content(
-        analyzed_docs
-    )
-
-    if top_content:
-
-        parts.append(
-            "\nPYTHON TOP-PERFORMING CONTENT:\n"
-        )
-
-        parts.append(
-            f"""
-Content ID:
-{top_content.get("content_id")}
-
-Source:
-{top_content.get("source_label")}
-
-Platform:
-{top_content.get("platform")}
-
-Category:
-{top_content.get("category")}
-
-Engagement Score:
-{top_content.get("engagement_score")}
-
-Likes:
-{top_content.get("likes")}
-
-Comments:
-{top_content.get("comments")}
-
-Shares:
-{top_content.get("shares")}
-
-Views:
-{top_content.get("views")}
-"""
-        )
-
-    return "\n".join(
-        parts
+    return "\n\n".join(
+        chunks
     )
 
 
 # ============================================================
-# FORMAT RAW CONTEXT
-# ============================================================
-
-def format_context(
-    docs: List[Document],
-) -> str:
-    """
-    Format retrieved documents for the LLM.
-
-    Includes:
-    1. Python-calculated analytics.
-    2. Original retrieved source content.
-
-    Source numbering is shared with the UI.
-    """
-
-    if not docs:
-        return (
-            "No relevant sources were retrieved."
-        )
-
-    analyzed_docs = (
-        analyze_retrieved_documents(
-            docs
-        )
-    )
-
-    analytics_context = (
-        format_analytics(
-            analyzed_docs
-        )
-    )
-
-    source_parts = []
-
-    source_parts.append(
-        analytics_context
-    )
-
-    source_parts.append(
-        "\n\nORIGINAL RETRIEVED SOURCES\n"
-    )
-
-    for item in analyzed_docs:
-
-        source_parts.append(
-            f"""
-{item.get("source_label")}
-
-Platform:
-{item.get("platform")}
-
-Category:
-{item.get("category")}
-
-Content ID:
-{item.get("content_id")}
-
-Original Content:
-{item.get("original_content")}
-"""
-        )
-
-    return "\n".join(
-        source_parts
-    )
-
-
-# ============================================================
-# MAIN TEST
+# TEST
 # ============================================================
 
 if __name__ == "__main__":
 
-    vectorstore = (
-        load_vectorstore()
-    )
-
-    query = (
-        "Which content performs best "
-        "based on engagement?"
-    )
-
-    docs = retrieve_context(
-        vectorstore,
-        query,
-        k=5,
-    )
-
     print(
         "\n"
-        + "=" * 70
+        "============================================================"
     )
 
     print(
-        "MARKETPULSE AI"
+        "MARKETPULSE AI - CHROMA RETRIEVAL TEST"
     )
 
     print(
-        "PYTHON ANALYTICS TEST"
+        "============================================================\n"
     )
 
-    print(
-        "=" * 70
-    )
-
-    print(
-        f"\nQuery:\n{query}\n"
-    )
-
-    analyzed = (
-        analyze_retrieved_documents(
-            docs
-        )
-    )
-
-    ranked = (
-        rank_by_engagement(
-            analyzed
-        )
-    )
-
-    print(
-        "\nRANKED RESULTS:"
-    )
-
-    for rank, item in enumerate(
-        ranked,
-        start=1,
-    ):
+    try:
 
         print(
-            f"""
-{rank}.
-Content ID: {item.get("content_id")}
-Source: {item.get("source_label")}
-Platform: {item.get("platform")}
-Category: {item.get("category")}
-Likes: {item.get("likes")}
-Comments: {item.get("comments")}
-Shares: {item.get("shares")}
-Views: {item.get("views")}
-Engagement Score: {item.get("engagement_score")}
-"""
+            "Loading Chroma vector store..."
         )
 
-    top = get_top_content(
-        analyzed
-    )
-
-    print(
-        "\nTOP PERFORMER:"
-    )
-
-    if top:
+        vectorstore = load_vectorstore()
 
         print(
-            f"""
-Content ID:
-{top.get("content_id")}
-
-Engagement Score:
-{top.get("engagement_score")}
-
-Source:
-{top.get("source_label")}
-"""
+            "✅ Chroma vector store loaded successfully."
         )
-
-    else:
 
         print(
-            "No calculable engagement score."
+            "\nTesting retrieval..."
         )
 
-    print(
-        "\n"
-        + "=" * 70
-    )
-
-    print(
-        "\nFULL LLM CONTEXT:"
-    )
-
-    print(
-        format_context(
-            docs
+        test_query = (
+            "Which content performs best "
+            "based on engagement?"
         )
-    )
+
+        docs = retrieve_context(
+            vectorstore,
+            test_query,
+            k=5,
+        )
+
+        print(
+            f"\nRetrieved documents: {len(docs)}"
+        )
+
+        print(
+            "\n"
+            "============================================================"
+        )
+
+        print(
+            "RETRIEVED CONTEXT"
+        )
+
+        print(
+            "============================================================\n"
+        )
+
+        print(
+            format_context(
+                docs
+            )
+        )
+
+        print(
+            "\n"
+            "============================================================"
+        )
+
+        print(
+            "TEST COMPLETED SUCCESSFULLY"
+        )
+
+        print(
+            "============================================================"
+        )
+
+    except Exception as error:
+
+        print(
+            "\n❌ TEST FAILED\n"
+        )
+
+        print(
+            str(error)
+        )

@@ -18,20 +18,30 @@ Model choice
   time, unlike hosted embedding APIs.
 """
 
-from langchain_community.embeddings import SentenceTransformerEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
 
-def get_embedding_function() -> SentenceTransformerEmbeddings:
+def get_embedding_function() -> HuggingFaceEmbeddings:
     """Return the embedding function used across the whole pipeline.
 
     Both the store-building step (05) and the query-time retrieval step
     (06) must use this SAME function -- mismatched embedding models
     between build time and query time silently produce meaningless
     similarity scores.
+
+    Uses langchain_huggingface.HuggingFaceEmbeddings (the maintained
+    replacement for the deprecated langchain_community
+    SentenceTransformerEmbeddings/HuggingFaceEmbeddings classes).
     """
-    return SentenceTransformerEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+    return HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+
+
+# Alias so 06_retrieve_context.py's dynamic loader (which probes for a
+# handful of common function names) finds this one directly instead of
+# falling back to reconstructing the embeddings from EMBEDDING_MODEL_NAME.
+get_embeddings = get_embedding_function
 
 
 if __name__ == "__main__":

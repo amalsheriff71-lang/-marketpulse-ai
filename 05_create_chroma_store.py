@@ -42,11 +42,20 @@ to cap the sample size -- but prefer the full dataset when possible.
 import importlib.util
 import os
 
-from langchain_community.vectorstores import Chroma
+# Modern, maintained integration -- matches what 06_retrieve_context.py
+# uses at query time. The old langchain_community.vectorstores.Chroma
+# path is deprecated and, combined with older chromadb releases, can
+# trip a recursive-typing hang in the `overrides` package on import.
+from langchain_chroma import Chroma
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSIST_DIRECTORY = os.path.join(BASE_DIR, "chroma_store")
-COLLECTION_NAME = "social_media_posts"
+
+# IMPORTANT: this MUST match COLLECTION_NAME in 06_retrieve_context.py.
+# Chroma silently creates a new, empty collection if you open a name
+# that doesn't exist yet -- a mismatch here is what caused
+# "The Chroma collection exists but contains zero documents."
+COLLECTION_NAME = "marketpulse"
 
 # Chunks are embedded and written to disk in batches of this size, so
 # memory usage stays flat no matter how large the dataset gets.
@@ -109,7 +118,10 @@ def build_chroma_store(
         done = min(i + batch_size, len(chunks))
         print(f"  ...{done:,}/{len(chunks):,} chunks embedded")
 
-    vectorstore.persist()
+    # langchain_chroma persists automatically as documents are added --
+    # there's no manual .persist() call anymore (that method was removed
+    # after Chroma 0.4.x; calling it on the old langchain_community
+    # wrapper is what produced the DeprecationWarning you saw).
     print(f"Done. Persisted Chroma store at: {persist_directory}")
     return vectorstore
 
