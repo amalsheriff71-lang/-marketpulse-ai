@@ -5,10 +5,11 @@
 Pipeline Stage 6: RETRIEVAL
 
 MarketPulse AI
-Production V7
+Production V8
 
 Loads the Chroma vector store from a private Hugging Face Dataset,
-caches the downloaded database locally, and performs retrieval.
+detects the existing Chroma collection automatically,
+and performs retrieval.
 """
 
 import importlib.util
@@ -34,9 +35,23 @@ BASE_DIR = Path(
 # CONFIGURATION
 # ============================================================
 
+# Expected collection name.
+# If this collection does not exist,
+# the code will automatically use
+# the first available collection.
+
 COLLECTION_NAME = "marketpulse"
 
-HF_DATASET = "amal-sherif71/marketpulse-chroma"
+
+# Private Hugging Face Dataset
+HF_DATASET = (
+    "amal-sherif71/marketpulse-chroma"
+)
+
+
+# Local temporary location
+# where the Hugging Face Chroma database
+# will be copied.
 
 LOCAL_CHROMA_DIR = (
     BASE_DIR / "chroma_store"
@@ -66,6 +81,7 @@ def load_embeddings():
         spec is None
         or spec.loader is None
     ):
+
         raise ImportError(
             "Could not load "
             "04_vector_representation.py"
@@ -73,54 +89,86 @@ def load_embeddings():
 
     module = (
         importlib.util
-        .module_from_spec(spec)
+        .module_from_spec(
+            spec
+        )
     )
 
     spec.loader.exec_module(
         module
     )
 
+
+    # --------------------------------------------------------
+    # Try get_embedding_function()
+    # --------------------------------------------------------
+
     if hasattr(
         module,
         "get_embedding_function",
     ):
+
         return (
             module
             .get_embedding_function()
         )
 
+
+    # --------------------------------------------------------
+    # Try get_embeddings()
+    # --------------------------------------------------------
+
     if hasattr(
         module,
         "get_embeddings",
     ):
+
         return (
             module
             .get_embeddings()
         )
 
+
+    # --------------------------------------------------------
+    # Try load_embeddings()
+    # --------------------------------------------------------
+
     if hasattr(
         module,
         "load_embeddings",
     ):
+
         return (
             module
             .load_embeddings()
         )
 
+
+    # --------------------------------------------------------
+    # Try create_embeddings()
+    # --------------------------------------------------------
+
     if hasattr(
         module,
         "create_embeddings",
     ):
+
         return (
             module
             .create_embeddings()
         )
+
+
+    # --------------------------------------------------------
+    # Try EMBEDDING_MODEL_NAME
+    # --------------------------------------------------------
 
     model_name = getattr(
         module,
         "EMBEDDING_MODEL_NAME",
         None,
     )
+
 
     if model_name:
 
@@ -144,6 +192,11 @@ def load_embeddings():
                 f"Technical details: {error}"
             ) from error
 
+
+    # --------------------------------------------------------
+    # No embedding loader found
+    # --------------------------------------------------------
+
     raise AttributeError(
         "No compatible embedding loader "
         "was found in "
@@ -160,10 +213,15 @@ def load_embeddings():
 )
 def download_chroma_store():
 
+    # --------------------------------------------------------
+    # Check if database already exists locally
+    # --------------------------------------------------------
+
     sqlite_file = (
         LOCAL_CHROMA_DIR
         / "chroma.sqlite3"
     )
+
 
     if sqlite_file.exists():
 
@@ -171,10 +229,16 @@ def download_chroma_store():
             LOCAL_CHROMA_DIR
         )
 
+
+    # --------------------------------------------------------
+    # Get Hugging Face Token
+    # --------------------------------------------------------
+
     hf_token = st.secrets.get(
         "HF_TOKEN",
         None,
     )
+
 
     if not hf_token:
 
@@ -182,6 +246,11 @@ def download_chroma_store():
             "HF_TOKEN is missing from "
             "Streamlit Secrets."
         )
+
+
+    # --------------------------------------------------------
+    # Import Hugging Face Hub
+    # --------------------------------------------------------
 
     try:
 
@@ -196,6 +265,11 @@ def download_chroma_store():
             "Install it with:\n"
             "pip install -U huggingface_hub"
         ) from error
+
+
+    # --------------------------------------------------------
+    # Download Dataset
+    # --------------------------------------------------------
 
     try:
 
@@ -216,10 +290,16 @@ def download_chroma_store():
             f"Technical details:\n{error}"
         ) from error
 
+
+    # --------------------------------------------------------
+    # Locate Chroma Store
+    # --------------------------------------------------------
+
     downloaded_chroma = (
         Path(downloaded_path)
         / "chroma_store"
     )
+
 
     if not downloaded_chroma.exists():
 
@@ -230,6 +310,11 @@ def download_chroma_store():
             f"{downloaded_path}"
         )
 
+
+    # --------------------------------------------------------
+    # Copy Chroma Database Locally
+    # --------------------------------------------------------
+
     try:
 
         if LOCAL_CHROMA_DIR.exists():
@@ -237,6 +322,7 @@ def download_chroma_store():
             shutil.rmtree(
                 LOCAL_CHROMA_DIR
             )
+
 
         shutil.copytree(
             downloaded_chroma,
@@ -251,6 +337,11 @@ def download_chroma_store():
             f"Technical details: {error}"
         ) from error
 
+
+    # --------------------------------------------------------
+    # Validate Chroma Database
+    # --------------------------------------------------------
+
     if not (
         LOCAL_CHROMA_DIR
         / "chroma.sqlite3"
@@ -260,6 +351,7 @@ def download_chroma_store():
             "chroma.sqlite3 was not found "
             "after downloading the database."
         )
+
 
     return str(
         LOCAL_CHROMA_DIR
@@ -275,15 +367,31 @@ def load_vectorstore(
     **kwargs,
 ):
 
+    # --------------------------------------------------------
+    # Download / locate Chroma
+    # --------------------------------------------------------
+
     chroma_dir = (
         download_chroma_store()
     )
+
+
+    # --------------------------------------------------------
+    # Load Embeddings
+    # --------------------------------------------------------
 
     embeddings = (
         load_embeddings()
     )
 
+
+    # --------------------------------------------------------
+    # Import Chroma
+    # --------------------------------------------------------
+
     try:
+
+        import chromadb
 
         from langchain_chroma import (
             Chroma,
@@ -292,44 +400,132 @@ def load_vectorstore(
     except ImportError as error:
 
         raise ImportError(
-            "The langchain-chroma package "
-            "is required."
+            "Chroma dependencies are required.\n"
+            "Please install chromadb and "
+            "langchain-chroma."
         ) from error
+
+
+    # --------------------------------------------------------
+    # Connect to Existing Chroma Database
+    # --------------------------------------------------------
 
     try:
 
+        client = (
+            chromadb.PersistentClient(
+                path=chroma_dir
+            )
+        )
+
+
+        # ----------------------------------------------------
+        # Discover Existing Collections
+        # ----------------------------------------------------
+
+        collections = (
+            client.list_collections()
+        )
+
+
+        if not collections:
+
+            raise RuntimeError(
+                "No Chroma collections were found "
+                "inside the downloaded database."
+            )
+
+
+        # ----------------------------------------------------
+        # Get Collection Names
+        # ----------------------------------------------------
+
+        collection_names = [
+            collection.name
+            for collection in collections
+        ]
+
+
+        # ----------------------------------------------------
+        # Select Collection
+        # ----------------------------------------------------
+
+        if (
+            COLLECTION_NAME
+            in collection_names
+        ):
+
+            selected_collection = (
+                COLLECTION_NAME
+            )
+
+        else:
+
+            # If "marketpulse" is not found,
+            # automatically use the first
+            # existing collection.
+
+            selected_collection = (
+                collection_names[0]
+            )
+
+
+        # ----------------------------------------------------
+        # Load LangChain Chroma
+        # ----------------------------------------------------
+
         vectorstore = Chroma(
-            collection_name=COLLECTION_NAME,
+            collection_name=(
+                selected_collection
+            ),
             embedding_function=embeddings,
             persist_directory=chroma_dir,
         )
+
+
+        # ----------------------------------------------------
+        # Validate Document Count
+        # ----------------------------------------------------
 
         collection = (
             vectorstore._collection
         )
 
+
         count = (
             collection.count()
         )
 
+
         if count == 0:
 
             raise RuntimeError(
-                "The Chroma collection exists "
-                "but contains zero documents."
+                "The Chroma collection "
+                f"'{selected_collection}' "
+                "exists but contains zero documents.\n\n"
+                f"Available collections: "
+                f"{collection_names}"
             )
 
+
+        # ----------------------------------------------------
+        # Success
+        # ----------------------------------------------------
+
         return vectorstore
+
 
     except Exception as error:
 
         raise RuntimeError(
             "Failed to load the Chroma "
             "vector store.\n\n"
-            f"Dataset:\n{HF_DATASET}\n\n"
-            f"Collection:\n"
+            f"Dataset:\n"
+            f"{HF_DATASET}\n\n"
+            f"Requested collection:\n"
             f"{COLLECTION_NAME}\n\n"
-            f"Technical details:\n{error}"
+            f"Technical details:\n"
+            f"{error}"
         ) from error
 
 
@@ -343,11 +539,20 @@ def retrieve_context(
     k=5,
 ):
 
+    # --------------------------------------------------------
+    # Validate Vector Store
+    # --------------------------------------------------------
+
     if vectorstore is None:
 
         raise ValueError(
             "Vector store is not loaded."
         )
+
+
+    # --------------------------------------------------------
+    # Validate Query
+    # --------------------------------------------------------
 
     if (
         not query
@@ -355,6 +560,11 @@ def retrieve_context(
     ):
 
         return []
+
+
+    # --------------------------------------------------------
+    # Similarity Search
+    # --------------------------------------------------------
 
     try:
 
@@ -366,14 +576,17 @@ def retrieve_context(
             )
         )
 
+
         return docs
+
 
     except Exception as error:
 
         raise RuntimeError(
             "Failed to retrieve documents "
             "from the Chroma vector store.\n"
-            f"Technical details: {error}"
+            f"Technical details:\n"
+            f"{error}"
         ) from error
 
 
@@ -385,18 +598,32 @@ def format_context(
     docs,
 ):
 
+    # --------------------------------------------------------
+    # No Documents
+    # --------------------------------------------------------
+
     if not docs:
 
         return (
             "No relevant documents were found."
         )
 
+
     chunks = []
+
+
+    # --------------------------------------------------------
+    # Process Documents
+    # --------------------------------------------------------
 
     for index, doc in enumerate(
         docs,
         start=1,
     ):
+
+        # ----------------------------------------------------
+        # Get Content
+        # ----------------------------------------------------
 
         if hasattr(
             doc,
@@ -406,6 +633,7 @@ def format_context(
             content = (
                 doc.page_content
             )
+
 
         elif isinstance(
             doc,
@@ -425,13 +653,20 @@ def format_context(
                 or ""
             )
 
+
         else:
 
             content = str(
                 doc
             )
 
+
+        # ----------------------------------------------------
+        # Get Metadata
+        # ----------------------------------------------------
+
         metadata = {}
+
 
         if hasattr(
             doc,
@@ -441,6 +676,7 @@ def format_context(
             metadata = (
                 doc.metadata
             )
+
 
         elif isinstance(
             doc,
@@ -454,6 +690,7 @@ def format_context(
                 )
             )
 
+
         if not isinstance(
             metadata,
             dict,
@@ -461,15 +698,22 @@ def format_context(
 
             metadata = {}
 
+
+        # ----------------------------------------------------
+        # Metadata Fields
+        # ----------------------------------------------------
+
         platform = metadata.get(
             "platform",
             "",
         )
 
+
         category = metadata.get(
             "category",
             "",
         )
+
 
         content_id = (
             metadata.get(
@@ -481,6 +725,11 @@ def format_context(
             or ""
         )
 
+
+        # ----------------------------------------------------
+        # Build Context
+        # ----------------------------------------------------
+
         chunks.append(
             f"[Source {index}]\n"
             f"Content ID: {content_id}\n"
@@ -488,6 +737,11 @@ def format_context(
             f"Category: {category}\n"
             f"Content: {content}"
         )
+
+
+    # --------------------------------------------------------
+    # Return Formatted Context
+    # --------------------------------------------------------
 
     return "\n\n".join(
         chunks
