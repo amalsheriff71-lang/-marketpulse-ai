@@ -1,32 +1,32 @@
+```python
 """
 06_retrieve_context.py
 ----------------------
 Pipeline Stage 6: RETRIEVAL
 
 MarketPulse AI
-AI-powered Marketing Intelligence
+Production V7
 
-Production V6
-
-Responsibilities:
-- Load the Chroma vector store safely.
-- Retrieve relevant documents.
-- Keep metadata available for analytics and UI.
-- Work locally on Windows.
-- Work on Streamlit Cloud.
-- Use the modern langchain-chroma integration.
+Loads the Chroma vector store from a private Hugging Face Dataset,
+caches the downloaded database locally, and performs retrieval.
 """
 
 import importlib.util
 import os
+import shutil
+from pathlib import Path
+
+import streamlit as st
 
 
 # ============================================================
 # BASE DIRECTORY
 # ============================================================
 
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
+BASE_DIR = Path(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
 )
 
 
@@ -34,12 +34,13 @@ BASE_DIR = os.path.dirname(
 # CONFIGURATION
 # ============================================================
 
-CHROMA_DIR = os.path.join(
-    BASE_DIR,
-    "chroma_store",
-)
-
 COLLECTION_NAME = "marketpulse"
+
+HF_DATASET = "amal-sherif71/marketpulse-chroma"
+
+LOCAL_CHROMA_DIR = (
+    BASE_DIR / "chroma_store"
+)
 
 
 # ============================================================
@@ -47,60 +48,74 @@ COLLECTION_NAME = "marketpulse"
 # ============================================================
 
 def load_embeddings():
-    """
-    Load the same embedding model used
-    when creating the Chroma database.
-    """
 
-    vector_module_path = os.path.join(
-        BASE_DIR,
-        "04_vector_representation.py",
+    vector_module_path = (
+        BASE_DIR
+        / "04_vector_representation.py"
     )
 
-    spec = importlib.util.spec_from_file_location(
-        "vector_representation_mod",
-        vector_module_path,
+    spec = (
+        importlib.util
+        .spec_from_file_location(
+            "vector_representation_mod",
+            vector_module_path,
+        )
     )
 
-    if spec is None or spec.loader is None:
+    if (
+        spec is None
+        or spec.loader is None
+    ):
         raise ImportError(
-            "Could not load 04_vector_representation.py"
+            "Could not load "
+            "04_vector_representation.py"
         )
 
-    module = importlib.util.module_from_spec(
-        spec
+    module = (
+        importlib.util
+        .module_from_spec(spec)
     )
 
     spec.loader.exec_module(
         module
     )
 
-    # Try common function names
     if hasattr(
         module,
         "get_embedding_function",
     ):
-        return module.get_embedding_function()
+        return (
+            module
+            .get_embedding_function()
+        )
 
     if hasattr(
         module,
         "get_embeddings",
     ):
-        return module.get_embeddings()
+        return (
+            module
+            .get_embeddings()
+        )
 
     if hasattr(
         module,
         "load_embeddings",
     ):
-        return module.load_embeddings()
+        return (
+            module
+            .load_embeddings()
+        )
 
     if hasattr(
         module,
         "create_embeddings",
     ):
-        return module.create_embeddings()
+        return (
+            module
+            .create_embeddings()
+        )
 
-    # Try common embedding constants
     model_name = getattr(
         module,
         "EMBEDDING_MODEL_NAME",
@@ -115,20 +130,167 @@ def load_embeddings():
                 HuggingFaceEmbeddings,
             )
 
-            return HuggingFaceEmbeddings(
-                model_name=model_name
+            return (
+                HuggingFaceEmbeddings(
+                    model_name=model_name
+                )
             )
 
         except Exception as error:
 
             raise RuntimeError(
-                "Could not initialize HuggingFace embeddings.\n"
+                "Could not initialize "
+                "HuggingFace embeddings.\n"
                 f"Technical details: {error}"
-            )
+            ) from error
 
     raise AttributeError(
-        "No compatible embedding loader was found "
-        "in 04_vector_representation.py."
+        "No compatible embedding loader "
+        "was found in "
+        "04_vector_representation.py."
+    )
+
+
+# ============================================================
+# DOWNLOAD CHROMA FROM HUGGING FACE
+# ============================================================
+
+@st.cache_resource(
+    show_spinner=False
+)
+def download_chroma_store():
+
+    # --------------------------------------------------------
+    # Check if already downloaded
+    # --------------------------------------------------------
+
+    sqlite_file = (
+        LOCAL_CHROMA_DIR
+        / "chroma.sqlite3"
+    )
+
+    if sqlite_file.exists():
+
+        return str(
+            LOCAL_CHROMA_DIR
+        )
+
+    # --------------------------------------------------------
+    # Validate Hugging Face token
+    # --------------------------------------------------------
+
+    hf_token = st.secrets.get(
+        "HF_TOKEN",
+        None,
+    )
+
+    if not hf_token:
+
+        raise RuntimeError(
+            "HF_TOKEN is missing from "
+            "Streamlit Secrets."
+        )
+
+    # --------------------------------------------------------
+    # Import Hugging Face Hub
+    # --------------------------------------------------------
+
+    try:
+
+        from huggingface_hub import (
+            snapshot_download,
+        )
+
+    except ImportError as error:
+
+        raise ImportError(
+            "huggingface_hub is required.\n"
+            "Install it with:\n"
+            "pip install -U huggingface_hub"
+        ) from error
+
+    # --------------------------------------------------------
+    # Download Dataset
+    # --------------------------------------------------------
+
+    try:
+
+        downloaded_path = (
+            snapshot_download(
+                repo_id=HF_DATASET,
+                repo_type="dataset",
+                token=hf_token,
+            )
+        )
+
+    except Exception as error:
+
+        raise RuntimeError(
+            "Failed to download the Chroma "
+            "database from Hugging Face.\n\n"
+            f"Dataset: {HF_DATASET}\n\n"
+            f"Technical details:\n{error}"
+        ) from error
+
+    # --------------------------------------------------------
+    # Locate chroma_store
+    # --------------------------------------------------------
+
+    downloaded_chroma = (
+        Path(downloaded_path)
+        / "chroma_store"
+    )
+
+    if not downloaded_chroma.exists():
+
+        raise FileNotFoundError(
+            "The 'chroma_store' folder was not "
+            "found inside the Hugging Face dataset.\n\n"
+            f"Downloaded path:\n"
+            f"{downloaded_path}"
+        )
+
+    # --------------------------------------------------------
+    # Copy Chroma database locally
+    # --------------------------------------------------------
+
+    try:
+
+        if LOCAL_CHROMA_DIR.exists():
+
+            shutil.rmtree(
+                LOCAL_CHROMA_DIR
+            )
+
+        shutil.copytree(
+            downloaded_chroma,
+            LOCAL_CHROMA_DIR,
+        )
+
+    except Exception as error:
+
+        raise RuntimeError(
+            "Failed to copy the Chroma "
+            "database locally.\n"
+            f"Technical details: {error}"
+        ) from error
+
+    # --------------------------------------------------------
+    # Validate database
+    # --------------------------------------------------------
+
+    if not (
+        LOCAL_CHROMA_DIR
+        / "chroma.sqlite3"
+    ).exists():
+
+        raise RuntimeError(
+            "chroma.sqlite3 was not found "
+            "after downloading the database."
+        )
+
+    return str(
+        LOCAL_CHROMA_DIR
     )
 
 
@@ -137,62 +299,42 @@ def load_embeddings():
 # ============================================================
 
 def load_vectorstore():
-    """
-    Load the existing Chroma vector store.
-
-    Uses the modern langchain-chroma package.
-    """
 
     # --------------------------------------------------------
-    # Validate Chroma directory
+    # Download / locate Chroma
     # --------------------------------------------------------
 
-    if not os.path.exists(
-        CHROMA_DIR
-    ):
-
-        raise FileNotFoundError(
-            "Chroma vector store directory was not found:\n"
-            f"{CHROMA_DIR}"
-        )
-
-    # --------------------------------------------------------
-    # Check directory contents
-    # --------------------------------------------------------
-
-    if not os.listdir(
-        CHROMA_DIR
-    ):
-
-        raise RuntimeError(
-            "The Chroma vector store directory is empty:\n"
-            f"{CHROMA_DIR}"
-        )
+    chroma_dir = (
+        download_chroma_store()
+    )
 
     # --------------------------------------------------------
     # Load embeddings
     # --------------------------------------------------------
 
-    embeddings = load_embeddings()
+    embeddings = (
+        load_embeddings()
+    )
 
     # --------------------------------------------------------
-    # Import modern Chroma integration
+    # Import Chroma
     # --------------------------------------------------------
 
     try:
 
-        from langchain_chroma import Chroma
+        from langchain_chroma import (
+            Chroma,
+        )
 
     except ImportError as error:
 
         raise ImportError(
-            "The langchain-chroma package is required.\n"
-            "Install it with:\n"
-            "pip install -U langchain-chroma"
+            "The langchain-chroma package "
+            "is required."
         ) from error
 
     # --------------------------------------------------------
-    # Try collection name
+    # Open Chroma
     # --------------------------------------------------------
 
     try:
@@ -200,24 +342,22 @@ def load_vectorstore():
         vectorstore = Chroma(
             collection_name=COLLECTION_NAME,
             embedding_function=embeddings,
-            persist_directory=CHROMA_DIR,
+            persist_directory=chroma_dir,
         )
-
-        # ----------------------------------------------------
-        # Validate collection
-        # ----------------------------------------------------
 
         collection = (
             vectorstore._collection
         )
 
-        count = collection.count()
+        count = (
+            collection.count()
+        )
 
         if count == 0:
 
             raise RuntimeError(
-                "The Chroma collection exists but contains "
-                "zero documents."
+                "The Chroma collection exists "
+                "but contains zero documents."
             )
 
         return vectorstore
@@ -225,9 +365,11 @@ def load_vectorstore():
     except Exception as error:
 
         raise RuntimeError(
-            "Failed to load the Chroma vector store.\n\n"
-            f"Directory:\n{CHROMA_DIR}\n\n"
-            f"Collection:\n{COLLECTION_NAME}\n\n"
+            "Failed to load the Chroma "
+            "vector store.\n\n"
+            f"Dataset:\n{HF_DATASET}\n\n"
+            f"Collection:\n"
+            f"{COLLECTION_NAME}\n\n"
             f"Technical details:\n{error}"
         ) from error
 
@@ -241,9 +383,6 @@ def retrieve_context(
     query,
     k=5,
 ):
-    """
-    Retrieve the most relevant documents.
-    """
 
     if vectorstore is None:
 
@@ -251,15 +390,21 @@ def retrieve_context(
             "Vector store is not loaded."
         )
 
-    if not query or not query.strip():
+    if (
+        not query
+        or not query.strip()
+    ):
 
         return []
 
     try:
 
-        docs = vectorstore.similarity_search(
-            query.strip(),
-            k=k,
+        docs = (
+            vectorstore
+            .similarity_search(
+                query.strip(),
+                k=k,
+            )
         )
 
         return docs
@@ -267,8 +412,8 @@ def retrieve_context(
     except Exception as error:
 
         raise RuntimeError(
-            "Failed to retrieve documents from "
-            "the Chroma vector store.\n"
+            "Failed to retrieve documents "
+            "from the Chroma vector store.\n"
             f"Technical details: {error}"
         ) from error
 
@@ -280,10 +425,6 @@ def retrieve_context(
 def format_context(
     docs,
 ):
-    """
-    Format retrieved documents for display
-    or legacy pipeline compatibility.
-    """
 
     if not docs:
 
@@ -297,10 +438,6 @@ def format_context(
         docs,
         start=1,
     ):
-
-        # ----------------------------------------------------
-        # Content
-        # ----------------------------------------------------
 
         if hasattr(
             doc,
@@ -335,10 +472,6 @@ def format_context(
                 doc
             )
 
-        # ----------------------------------------------------
-        # Metadata
-        # ----------------------------------------------------
-
         metadata = {}
 
         if hasattr(
@@ -346,16 +479,20 @@ def format_context(
             "metadata",
         ):
 
-            metadata = doc.metadata
+            metadata = (
+                doc.metadata
+            )
 
         elif isinstance(
             doc,
             dict,
         ):
 
-            metadata = doc.get(
-                "metadata",
-                {},
+            metadata = (
+                doc.get(
+                    "metadata",
+                    {},
+                )
             )
 
         if not isinstance(
@@ -396,96 +533,4 @@ def format_context(
     return "\n\n".join(
         chunks
     )
-
-
-# ============================================================
-# TEST
-# ============================================================
-
-if __name__ == "__main__":
-
-    print(
-        "\n"
-        "============================================================"
-    )
-
-    print(
-        "MARKETPULSE AI - CHROMA RETRIEVAL TEST"
-    )
-
-    print(
-        "============================================================\n"
-    )
-
-    try:
-
-        print(
-            "Loading Chroma vector store..."
-        )
-
-        vectorstore = load_vectorstore()
-
-        print(
-            "✅ Chroma vector store loaded successfully."
-        )
-
-        print(
-            "\nTesting retrieval..."
-        )
-
-        test_query = (
-            "Which content performs best "
-            "based on engagement?"
-        )
-
-        docs = retrieve_context(
-            vectorstore,
-            test_query,
-            k=5,
-        )
-
-        print(
-            f"\nRetrieved documents: {len(docs)}"
-        )
-
-        print(
-            "\n"
-            "============================================================"
-        )
-
-        print(
-            "RETRIEVED CONTEXT"
-        )
-
-        print(
-            "============================================================\n"
-        )
-
-        print(
-            format_context(
-                docs
-            )
-        )
-
-        print(
-            "\n"
-            "============================================================"
-        )
-
-        print(
-            "TEST COMPLETED SUCCESSFULLY"
-        )
-
-        print(
-            "============================================================"
-        )
-
-    except Exception as error:
-
-        print(
-            "\n❌ TEST FAILED\n"
-        )
-
-        print(
-            str(error)
-        )
+```
